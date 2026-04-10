@@ -55,7 +55,7 @@ const LoginPage = () => {
     setError("");
 
     try {
-      const result = await authService.login(username, password);
+      const result = await authService.login(username, password, role || 'student');
       
       if (result.success) {
         const userRole = result.user.role;
@@ -213,6 +213,14 @@ const LoginPage = () => {
               </button>
             </div>
           </form>
+
+          {/* Demo credentials hint */}
+          <div className="mt-8 bg-muted/50 border border-border rounded-lg p-4 text-xs space-y-1">
+            <p className="font-semibold">Demo Credentials:</p>
+            <p>Admin: admin / admin123</p>
+            <p>Teacher: teacher / teacher123</p>
+            <p>Student: student / student123</p>
+          </div>
 
           <div className="text-center mt-6">
             <a href="#" className="text-primary text-sm hover:underline">Forgot your password?</a>

@@ -1,4 +1,4 @@
-# backend_api.py - Complete Working Version
+# backend_api.py - Complete Working Version with Saved Timetables
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -6,16 +6,15 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 import sqlite3
 import hashlib
-import uuid
 from datetime import datetime, timedelta
 import jwt
 import uvicorn
-import os
 import random
+import json
 
 app = FastAPI(title="SGSITS Timetable API")
 
-# ============ CORS FIX - Allow all origins for development ============
+# ============ CORS ============
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,12 +39,18 @@ def init_db():
     conn = get_db()
     cursor = conn.cursor()
     
-    # Drop existing tables to recreate with correct schema
+    # Drop existing tables
     cursor.execute("DROP TABLE IF EXISTS users")
     cursor.execute("DROP TABLE IF EXISTS teachers")
     cursor.execute("DROP TABLE IF EXISTS subjects")
     cursor.execute("DROP TABLE IF EXISTS timetable")
     cursor.execute("DROP TABLE IF EXISTS rooms")
+    cursor.execute("DROP TABLE IF EXISTS saved_timetables")
+    cursor.execute("DROP TABLE IF EXISTS student_groups")
+    cursor.execute("DROP TABLE IF EXISTS course_assignments")
+    cursor.execute("DROP TABLE IF EXISTS time_slots")
+    cursor.execute("DROP TABLE IF EXISTS courses")
+    cursor.execute("DROP TABLE IF EXISTS timetable_entries")
     
     # Users table
     cursor.execute('''
@@ -71,7 +76,7 @@ def init_db():
         )
     ''')
     
-    # Rooms table (create BEFORE subjects)
+    # Rooms table
     cursor.execute('''
         CREATE TABLE rooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,36 +88,93 @@ def init_db():
         )
     ''')
     
-    # Subjects table
+    # Courses table
     cursor.execute('''
-        CREATE TABLE subjects (
+        CREATE TABLE courses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT,
-            name TEXT,
-            branch TEXT,
-            year INTEGER,
-            teacher_id INTEGER,
-            teacher2_id INTEGER,
-            FOREIGN KEY (teacher_id) REFERENCES teachers(id),
-            FOREIGN KEY (teacher2_id) REFERENCES teachers(id)
+            course_code TEXT UNIQUE,
+            course_name TEXT,
+            credits INTEGER,
+            hours_per_week INTEGER,
+            department TEXT,
+            semester INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
-    # Timetable entries
+    # Student groups table
     cursor.execute('''
-        CREATE TABLE timetable (
+        CREATE TABLE student_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_code TEXT UNIQUE,
+            group_name TEXT,
+            semester INTEGER,
+            department TEXT,
+            student_count INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Course assignments table
+    cursor.execute('''
+        CREATE TABLE course_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            course_id INTEGER,
+            teacher_id INTEGER,
+            group_id INTEGER,
+            semester INTEGER,
+            hours_per_week INTEGER,
+            FOREIGN KEY (course_id) REFERENCES courses(id),
+            FOREIGN KEY (teacher_id) REFERENCES teachers(id),
+            FOREIGN KEY (group_id) REFERENCES student_groups(id)
+        )
+    ''')
+    
+    # Time slots table
+    cursor.execute('''
+        CREATE TABLE time_slots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slot_code TEXT,
+            day_of_week INTEGER,
+            day_name TEXT,
+            start_time TEXT,
+            end_time TEXT,
+            is_break BOOLEAN DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Timetable entries table
+    cursor.execute('''
+        CREATE TABLE timetable_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            teacher_id INTEGER,
+            group_id INTEGER,
+            room_id INTEGER,
+            slot_id INTEGER,
+            course_id INTEGER,
+            semester INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (teacher_id) REFERENCES teachers(id),
+            FOREIGN KEY (group_id) REFERENCES student_groups(id),
+            FOREIGN KEY (room_id) REFERENCES rooms(id),
+            FOREIGN KEY (slot_id) REFERENCES time_slots(id),
+            FOREIGN KEY (course_id) REFERENCES courses(id)
+        )
+    ''')
+    
+    # Saved timetables table (for sharing)
+    cursor.execute('''
+        CREATE TABLE saved_timetables (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             branch TEXT,
             year INTEGER,
             section TEXT,
-            subject_id INTEGER,
-            teacher_id INTEGER,
-            day TEXT,
-            time_slot TEXT,
-            room_id INTEGER,
-            FOREIGN KEY (subject_id) REFERENCES subjects(id),
-            FOREIGN KEY (teacher_id) REFERENCES teachers(id),
-            FOREIGN KEY (room_id) REFERENCES rooms(id)
+            timetable_data TEXT,
+            generated_by INTEGER,
+            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_active BOOLEAN DEFAULT 1,
+            FOREIGN KEY (generated_by) REFERENCES users(id)
         )
     ''')
     
@@ -156,38 +218,91 @@ def init_db():
         cursor.execute("INSERT OR IGNORE INTO rooms (room_code, room_name, capacity, room_type) VALUES (?,?,?,?)",
                       (code, name, cap, rtype))
     
-    # Get teacher IDs for subject assignment
+    # Insert sample courses
+    courses = [
+        ("CS301", "Data Structures", 4, 4, "CSE", 3),
+        ("CS302", "Algorithms", 4, 4, "CSE", 3),
+        ("EE201", "Circuit Theory", 3, 3, "EE", 2),
+        ("ME101", "Engineering Mechanics", 3, 3, "ME", 1),
+        ("CS101", "Programming in C", 3, 3, "CSE", 1),
+    ]
+    for code, name, credits, hours, dept, sem in courses:
+        cursor.execute("INSERT OR IGNORE INTO courses (course_code, course_name, credits, hours_per_week, department, semester) VALUES (?,?,?,?,?,?)",
+                      (code, name, credits, hours, dept, sem))
+    
+    # Insert sample student groups
+    groups = [
+        ("SEA", "SE Computer A", 3, "CSE", 60),
+        ("SEB", "SE Computer B", 3, "CSE", 58),
+        ("TEA", "TE Computer A", 5, "CSE", 55),
+    ]
+    for code, name, sem, dept, count in groups:
+        cursor.execute("INSERT OR IGNORE INTO student_groups (group_code, group_name, semester, department, student_count) VALUES (?,?,?,?,?)",
+                      (code, name, sem, dept, count))
+    
+    # Insert sample time slots
+    days = [(0, "Monday"), (1, "Tuesday"), (2, "Wednesday"), (3, "Thursday"), (4, "Friday")]
+    times = [
+        ("S1", "09:00", "10:00"), ("S2", "10:00", "11:00"), ("S3", "11:00", "12:00"),
+        ("LUNCH", "12:00", "13:00"), ("S4", "14:00", "15:00"), ("S5", "15:00", "16:00"), ("S6", "16:00", "17:00")
+    ]
+    
+    slot_id = 1
+    for day_idx, day_name in days:
+        for code, start, end in times:
+            is_break = 1 if code == "LUNCH" else 0
+            cursor.execute("INSERT OR IGNORE INTO time_slots (id, slot_code, day_of_week, day_name, start_time, end_time, is_break) VALUES (?,?,?,?,?,?,?)",
+                          (slot_id, f"{day_name[:3]}{code}", day_idx, day_name, start, end, is_break))
+            slot_id += 1
+    
+    # Insert sample course assignments
+    # Get teacher IDs
     cursor.execute("SELECT id FROM teachers")
     teacher_ids = [row['id'] for row in cursor.fetchall()]
     
-    if not teacher_ids:
-        teacher_ids = [1, 2, 3, 4, 5]
+    # Get course IDs
+    cursor.execute("SELECT id FROM courses")
+    course_ids = [row['id'] for row in cursor.fetchall()]
     
-    # Insert sample subjects for all branches and years
-    branches = ['CSE', 'EE', 'ME', 'ECE', 'CE', 'IT']
-    years = [1, 2, 3, 4]
+    # Get group IDs
+    cursor.execute("SELECT id FROM student_groups")
+    group_ids = [row['id'] for row in cursor.fetchall()]
     
-    subject_counter = 1
-    for branch in branches:
-        for year in years:
-            # Create 5-6 subjects per branch per year
-            subjects_data = [
-                (f"{branch}{year}01", f"Subject {year}01", branch, year, teacher_ids[0] if teacher_ids else 1, teacher_ids[1] if len(teacher_ids) > 1 else None),
-                (f"{branch}{year}02", f"Subject {year}02", branch, year, teacher_ids[0] if teacher_ids else 1, None),
-                (f"{branch}{year}03", f"Subject {year}03", branch, year, teacher_ids[1] if len(teacher_ids) > 1 else teacher_ids[0], None),
-                (f"{branch}{year}04", f"Subject {year}04", branch, year, teacher_ids[2] if len(teacher_ids) > 2 else teacher_ids[0], None),
-                (f"{branch}{year}05", f"Subject {year}05", branch, year, teacher_ids[0] if teacher_ids else 1, teacher_ids[1] if len(teacher_ids) > 1 else None),
-                (f"{branch}{year}06", f"Subject {year}06 Lab", branch, year, teacher_ids[2] if len(teacher_ids) > 2 else teacher_ids[0], None),
-            ]
-            for s in subjects_data:
-                cursor.execute("INSERT OR IGNORE INTO subjects (code, name, branch, year, teacher_id, teacher2_id) VALUES (?,?,?,?,?,?)", s)
+    if teacher_ids and course_ids and group_ids:
+        assignments = [
+            (course_ids[0], teacher_ids[0], group_ids[0], 3, 4),
+            (course_ids[0], teacher_ids[0], group_ids[1], 3, 4),
+            (course_ids[1], teacher_ids[1], group_ids[0], 3, 4),
+            (course_ids[1], teacher_ids[1], group_ids[1], 3, 4),
+        ]
+        for course_id, teacher_id, group_id, sem, hours in assignments:
+            cursor.execute("INSERT OR IGNORE INTO course_assignments (course_id, teacher_id, group_id, semester, hours_per_week) VALUES (?,?,?,?,?)",
+                          (course_id, teacher_id, group_id, sem, hours))
+    
+    # Insert sample student users
+    student_pw = hashlib.sha256("student123".encode()).hexdigest()
+    students = [
+        ("student1", "student1@sgsits.edu", student_pw, "John Student", "student"),
+        ("student2", "student2@sgsits.edu", student_pw, "Jane Student", "student"),
+        ("student", "student@sgsits.edu", student_pw, "Demo Student", "student"),
+    ]
+    for s in students:
+        cursor.execute("INSERT OR IGNORE INTO users (username, email, password_hash, full_name, role) VALUES (?,?,?,?,?)", s)
+    
+    # Insert sample teacher users
+    teacher_pw = hashlib.sha256("teacher123".encode()).hexdigest()
+    teacher_users = [
+        ("teacher1", "teacher1@sgsits.edu", teacher_pw, "Prof. Rahul Sharma", "teacher"),
+        ("teacher2", "teacher2@sgsits.edu", teacher_pw, "Prof. Neha Verma", "teacher"),
+        ("teacher", "teacher@sgsits.edu", teacher_pw, "Demo Teacher", "teacher"),
+    ]
+    for t in teacher_users:
+        cursor.execute("INSERT OR IGNORE INTO users (username, email, password_hash, full_name, role) VALUES (?,?,?,?,?)", t)
     
     conn.commit()
     conn.close()
-    print("✅ Database initialized with correct schema")
-    print("✅ Sample teachers, subjects, and rooms created")
+    print("✅ Database initialized with sample data")
 
-# Initialize database
 init_db()
 
 # ============ AUTH FUNCTIONS ============
@@ -261,11 +376,9 @@ async def login(request: LoginRequest):
     conn.close()
     
     if not user:
-        print(f"User not found: {request.username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     if user['password_hash'] != hash_password(request.password):
-        print(f"Password incorrect for: {request.username}")
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     token = create_token(user['id'], user['username'], user['role'])
@@ -351,109 +464,245 @@ async def get_subjects(branch: str, year: int):
     conn.close()
     return {"subjects": subjects}
 
-# ============ TIMETABLE ENDPOINTS ============
+# ============ TIMETABLE GENERATION WITH SAVING ============
 @app.post("/api/timetable/generate")
 async def generate_timetable(request: TimetableGenerateRequest, current_user=Depends(require_admin)):
+    """Generate timetable using the existing database schema and save for sharing"""
+
     conn = get_db()
     cursor = conn.cursor()
+
+    # Map year to the correct abbreviation
+    year_abbrev = {1: "FY", 2: "SY", 3: "TY", 4: "BTech"}
+    year_display = year_abbrev.get(request.year, f"Year {request.year}")
     
-    # Clear existing timetable for this section
-    cursor.execute("DELETE FROM timetable WHERE branch = ? AND year = ? AND section = ?",
-                   (request.branch, request.year, request.section))
+    group_code = f"{request.branch}{request.year}{request.section}"
     
-    # Get subjects for this branch and year
-    cursor.execute("SELECT * FROM subjects WHERE branch = ? AND year = ?", (request.branch, request.year))
-    subjects = cursor.fetchall()
-    
-    if not subjects:
+    # Get or create the student group
+    cursor.execute("SELECT id FROM student_groups WHERE group_code = ?", (group_code,))
+    group_row = cursor.fetchone()
+
+    if not group_row:
+        cursor.execute(""" 
+            INSERT INTO student_groups (group_code, group_name, semester, department, student_count) 
+            VALUES (?, ?, ?, ?, ?)
+        """, (group_code, f"{request.branch} {year_display} Section {request.section}", 
+              request.year, request.branch, 60))
+        group_id = cursor.lastrowid
+    else:
+        group_id = group_row['id']
+
+    # Clear existing timetable entries for this group
+    cursor.execute("DELETE FROM timetable_entries WHERE group_id = ?", (group_id,))
+
+    # Get course assignments for this group
+    cursor.execute("""
+        SELECT ca.*, c.course_code, c.course_name, t.name as teacher_name, t.id as teacher_id
+        FROM course_assignments ca
+        JOIN courses c ON ca.course_id = c.id
+        JOIN teachers t ON ca.teacher_id = t.id
+        WHERE ca.group_id = ? AND ca.semester = ?
+    """, (group_id, request.year))
+
+    assignments = cursor.fetchall()
+
+    if not assignments:
         conn.close()
-        return {"success": False, "message": "No subjects found for this branch and year"}
+        return {"success": False, "message": "No course assignments found for this group. Please assign courses first."}
+
+    # Get available time slots (excluding breaks)
+    cursor.execute("SELECT id, day_name, start_time, end_time FROM time_slots WHERE is_break = 0 ORDER BY day_of_week, start_time")
+    time_slots = cursor.fetchall()
+
+    # Track teacher schedules to prevent conflicts
+    teacher_schedule = {}
+    room_schedule = {}
+    assigned_count = 0
+    timetable_entries_list = []
+
+    # Get available rooms
+    cursor.execute("SELECT id FROM rooms ORDER BY capacity DESC")
+    available_rooms = [row['id'] for row in cursor.fetchall()]
+
+    # Assign each course to time slots
+    for assignment in assignments:
+        teacher_id = assignment['teacher_id']
+        course_id = assignment['course_id']
+        hours_needed = assignment['hours_per_week']
+
+        if teacher_id not in teacher_schedule:
+            teacher_schedule[teacher_id] = set()
+
+        slots_assigned = 0
+        for slot in time_slots:
+            if slots_assigned >= hours_needed:
+                break
+
+            slot_id = slot['id']
+
+            if slot_id in teacher_schedule[teacher_id]:
+                continue
+
+            room_id = None
+            for r_id in available_rooms:
+                if r_id not in room_schedule:
+                    room_schedule[r_id] = set()
+                if slot_id not in room_schedule[r_id]:
+                    room_id = r_id
+                    break
+
+            if room_id:
+                cursor.execute("""
+                    INSERT INTO timetable_entries (teacher_id, group_id, room_id, slot_id, course_id, semester)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (teacher_id, group_id, room_id, slot_id, course_id, request.year))
+
+                teacher_schedule[teacher_id].add(slot_id)
+                room_schedule[room_id].add(slot_id)
+                
+                timetable_entries_list.append({
+                    'day': slot['day_name'],
+                    'time_slot': f"{slot['start_time']}-{slot['end_time']}",
+                    'subject_code': assignment['course_code'],
+                    'subject_name': assignment['course_name'],
+                    'teacher_name': assignment['teacher_name']
+                })
+                
+                assigned_count += 1
+                slots_assigned += 1
+
+    # Save timetable data to saved_timetables table for sharing
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    time_slots_list = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00',
+                       '14:00-15:00', '15:00-16:00', '16:00-17:00']
     
-    # Time slots
-    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-    time_slots = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', 
-                  '14:00-15:00', '15:00-16:00', '16:00-17:00']
+    timetable_data = json.dumps({
+        'branch': request.branch,
+        'year': request.year,
+        'section': request.section,
+        'entries': timetable_entries_list,
+        'days': days,
+        'time_slots': time_slots_list,
+        'generated_at': datetime.now().isoformat()
+    })
     
-    # Get rooms
-    cursor.execute("SELECT id FROM rooms")
-    rooms = cursor.fetchall()
-    room_ids = [room['id'] for room in rooms] if rooms else [1, 2, 3, 4, 5]
-    
-    entries_count = 0
-    for i, subject in enumerate(subjects):
-        day_index = (entries_count // len(time_slots)) % len(days)
-        time_index = entries_count % len(time_slots)
-        
-        day = days[day_index]
-        time = time_slots[time_index]
-        room_id = room_ids[i % len(room_ids)]
-        
-        teacher_id = subject['teacher_id'] if subject['teacher_id'] else subject['teacher2_id']
-        if not teacher_id:
-            cursor.execute("SELECT id FROM teachers LIMIT 1")
-            first_teacher = cursor.fetchone()
-            teacher_id = first_teacher['id'] if first_teacher else 1
-        
-        cursor.execute('''
-            INSERT INTO timetable (branch, year, section, subject_id, teacher_id, day, time_slot, room_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (request.branch, request.year, request.section, subject['id'], teacher_id, day, time, room_id))
-        
-        entries_count += 1
-    
+    cursor.execute('''
+        INSERT OR REPLACE INTO saved_timetables (branch, year, section, timetable_data, generated_by, is_active)
+        VALUES (?, ?, ?, ?, ?, 1)
+    ''', (request.branch, request.year, request.section, timetable_data, current_user.get('user_id', 1)))
+
     conn.commit()
     conn.close()
-    
-    return {"success": True, "message": f"Timetable generated with {entries_count} entries"}
+
+    return {
+        "success": True,
+        "message": f"Timetable generated and saved for {request.branch} Year {request.year} Section {request.section}",
+        "assignments": assigned_count
+    }
 
 @app.get("/api/timetable/view/{branch}/{year}/{section}")
 async def view_timetable(branch: str, year: int, section: str, current_user=Depends(get_current_user)):
     conn = get_db()
     cursor = conn.cursor()
     
+    # First check if there's a saved timetable
     cursor.execute('''
-        SELECT t.*, s.name as subject_name, s.code as subject_code,
-               tc.name as teacher_name, r.room_code
-        FROM timetable t
-        JOIN subjects s ON t.subject_id = s.id
-        JOIN teachers tc ON t.teacher_id = tc.id
-        JOIN rooms r ON t.room_id = r.id
-        WHERE t.branch = ? AND t.year = ? AND t.section = ?
-        ORDER BY 
-            CASE t.day
-                WHEN 'Monday' THEN 1
-                WHEN 'Tuesday' THEN 2
-                WHEN 'Wednesday' THEN 3
-                WHEN 'Thursday' THEN 4
-                WHEN 'Friday' THEN 5
-                WHEN 'Saturday' THEN 6
-            END,
-            CASE t.time_slot
-                WHEN '09:00-10:00' THEN 1
-                WHEN '10:00-11:00' THEN 2
-                WHEN '11:00-12:00' THEN 3
-                WHEN '12:00-13:00' THEN 4
-                WHEN '14:00-15:00' THEN 5
-                WHEN '15:00-16:00' THEN 6
-                WHEN '16:00-17:00' THEN 7
-            END
+        SELECT timetable_data, generated_at 
+        FROM saved_timetables 
+        WHERE branch = ? AND year = ? AND section = ? AND is_active = 1
+        ORDER BY generated_at DESC LIMIT 1
     ''', (branch, year, section))
     
+    saved = cursor.fetchone()
+    
+    if saved:
+        # Return saved timetable
+        data = json.loads(saved['timetable_data'])
+        days = data.get('days', ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'])
+        time_slots = data.get('time_slots', ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', 
+                                              '14:00-15:00', '15:00-16:00', '16:00-17:00'])
+        
+        # Build matrix from saved entries
+        matrix = {day: {slot: '—' for slot in time_slots} for day in days}
+        
+        for entry in data.get('entries', []):
+            day = entry.get('day')
+            slot = entry.get('time_slot')
+            if day and slot and day in matrix and slot in matrix[day]:
+                matrix[day][slot] = f"{entry.get('subject_code', '')}<br>({entry.get('teacher_name', '')})"
+        
+        # Add lunch break
+        for day in days:
+            if '12:00-13:00' in matrix[day]:
+                matrix[day]['12:00-13:00'] = '🍽️ LUNCH BREAK'
+        
+        return {
+            "branch": branch,
+            "year": year,
+            "section": section,
+            "days": days,
+            "time_slots": time_slots,
+            "entries": data.get('entries', []),
+            "timetable": matrix
+        }
+    
+    # Fallback to querying timetable_entries table directly
+    year_abbrev = {1: "FY", 2: "SY", 3: "TY", 4: "BTech"}
+    group_code = f"{branch}{year}{section}"
+    
+    cursor.execute("SELECT id FROM student_groups WHERE group_code = ?", (group_code,))
+    group_row = cursor.fetchone()
+
+    if not group_row:
+        conn.close()
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        time_slots = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', 
+                      '14:00-15:00', '15:00-16:00', '16:00-17:00']
+        matrix = {day: {slot: '—' for slot in time_slots} for day in days}
+        for day in days:
+            matrix[day]['12:00-13:00'] = '🍽️ LUNCH BREAK'
+        return {
+            "branch": branch,
+            "year": year,
+            "section": section,
+            "days": days,
+            "time_slots": time_slots,
+            "entries": [],
+            "timetable": matrix
+        }
+
+    group_id = group_row['id']
+
+    cursor.execute('''
+        SELECT te.*, ts.day_name, ts.start_time, ts.end_time, ts.is_break,
+               c.course_code, c.course_name, t.name as teacher_name, r.room_code
+        FROM timetable_entries te
+        JOIN time_slots ts ON te.slot_id = ts.id
+        JOIN courses c ON te.course_id = c.id
+        JOIN teachers t ON te.teacher_id = t.id
+        JOIN rooms r ON te.room_id = r.id
+        WHERE te.group_id = ?
+        ORDER BY ts.day_of_week, ts.start_time
+    ''', (group_id,))
+
     entries = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    
-    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-    time_slots = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00', 
+
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    time_slots = ['09:00-10:00', '10:00-11:00', '11:00-12:00', '12:00-13:00',
                   '14:00-15:00', '15:00-16:00', '16:00-17:00']
-    
+
     matrix = {day: {slot: '—' for slot in time_slots} for day in days}
-    
+
     for entry in entries:
-        matrix[entry['day']][entry['time_slot']] = f"{entry['subject_code']}<br>({entry['teacher_name']})"
-    
-    for day in days:
-        matrix[day]['12:00-13:00'] = '🍽️ LUNCH BREAK'
-    
+        day = entry['day_name']
+        time_slot = f"{entry['start_time']}-{entry['end_time']}"
+        if time_slot in matrix[day]:
+            if entry['is_break']:
+                matrix[day][time_slot] = '🍽️ LUNCH BREAK'
+            else:
+                matrix[day][time_slot] = f"{entry['course_code']}<br>({entry['teacher_name']})"
+
     return {
         "branch": branch,
         "year": year,
@@ -486,6 +735,21 @@ async def get_branches():
         {"code": "IT", "name": "Information Technology"}
     ]}
 
+# ============ TIMETABLE HISTORY ============
+@app.get("/api/timetable/history")
+async def get_timetable_history(current_user=Depends(require_admin)):
+    """Get all saved timetables (admin only)"""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, branch, year, section, generated_at, is_active
+        FROM saved_timetables
+        ORDER BY generated_at DESC
+    ''')
+    history = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return {"history": history}
+
 @app.get("/")
 async def root():
     return {"message": "SGSITS Timetable API is running", "status": "healthy"}
@@ -497,11 +761,16 @@ if __name__ == "__main__":
     print("📍 API: http://localhost:8000")
     print("📍 Docs: http://localhost:8000/docs")
     print("="*50)
-    print("🔐 Default Admin Login:")
-    print("   Username: admin")
-    print("   Password: admin123")
+    print("🔐 Login Credentials:")
+    print("   Admin:    admin / admin123")
+    print("   Teacher:  teacher1 / teacher123")
+    print("   Student:  student1 / student123")
     print("="*50)
-    print("✅ CORS enabled - All origins allowed")
-    print("✅ Database ready with sample data")
+    print("✅ Features:")
+    print("   - Monday-Friday timetable (5 days)")
+    print("   - Teacher conflict prevention")
+    print("   - Timetable saved and shared across all roles")
+    print("   - Teachers and students can view generated timetables")
+    print("   - Lunch break at 12:00-13:00")
     print("="*50)
     uvicorn.run(app, host="0.0.0.0", port=8000)

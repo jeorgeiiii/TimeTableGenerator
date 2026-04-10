@@ -4,15 +4,7 @@ import { BRANCHES, YEARS } from "@/lib/store";
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Download, Eye, Loader2 } from "lucide-react";
-
-interface TimetableData {
-  branch: string;
-  year: number;
-  section: string;
-  days: string[];
-  time_slots: string[];
-  timetable: Record<string, Record<string, string>>;
-}
+import timetableService, { TimetableData } from '../services/timetable_service';
 
 const ViewTimetable = () => {
   const [branch, setBranch] = useState("CSE");
@@ -24,12 +16,9 @@ const ViewTimetable = () => {
   const loadTimetable = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/timetable/view/${branch}/${parseInt(year)}/${section}`, {
-        headers: {
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
-        }
-      });
-      const data = await response.json();
+      // Convert "1st Year" to 1, "2nd Year" to 2, etc.
+      const yearNumber = parseInt(year.replace(/\D/g, ''));
+      const data = await timetableService.viewTimetable(branch, yearNumber, section);
       setTimetable(data);
       if (data.branch) {
         toast.success("Timetable loaded!");
@@ -52,7 +41,8 @@ const ViewTimetable = () => {
     for (const timeSlot of timetable.time_slots) {
       const row: string[] = [timeSlot];
       for (const day of timetable.days) {
-        let cellValue = timetable.timetable[day][timeSlot];
+        const dayData = timetable.timetable?.[day];
+        let cellValue = dayData?.[timeSlot] || '—';
         if (cellValue && cellValue.includes('<br>')) {
           cellValue = cellValue.replace('<br>', ' - ');
         }
@@ -159,7 +149,8 @@ const ViewTimetable = () => {
                 <tr key={slot} className="border-b border-border/50 hover:bg-muted/20">
                   <td className="py-3 px-3 font-medium border">{slot}</td>
                   {timetable.days.map((day: string) => {
-                    const cell = timetable.timetable[day][slot];
+                    const dayData = timetable.timetable?.[day];
+                    const cell = dayData?.[slot] || '—';
                     const isLunch = slot === '12:00-13:00';
                     return (
                       <td key={day} className={`py-3 px-3 text-center border ${isLunch ? 'bg-yellow-500/10' : ''}`}>

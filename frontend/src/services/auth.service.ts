@@ -24,13 +24,22 @@ export interface AuthResponse {
 }
 
 class AuthService {
-  async login(username: string, password: string): Promise<AuthResponse> {
-    const response = await api.post('/auth/login', { username, password });
-    if (response.data.success) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+  async login(username: string, password: string, role: string): Promise<AuthResponse> {
+    try {
+      console.log('Attempting login for:', username, 'role:', role);
+      const response = await api.post('/auth/login', { username, password, role });
+      console.log('Login response:', response.data);
+      
+      if (response.data.success) {
+        localStorage.setItem('token', response.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      return response.data;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      console.error('Login error:', errorMessage);
+      throw error;
     }
-    return response.data;
   }
 
   async signup(data: SignupData): Promise<AuthResponse> {

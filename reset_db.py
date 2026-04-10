@@ -1,14 +1,19 @@
-# reset_db.py - Run this to reset database completely
+# reset_db.py - Updated to use correct database name
 import sqlite3
 import os
 import hashlib
 
-DB_PATH = "timetable.db"
+# CHANGE THIS LINE - use the same database name as backend_api.py
+DB_PATH = "sgsits_timetable.db"  # Changed from "timetable.db"
 
 # Delete old database
 if os.path.exists(DB_PATH):
-    os.remove(DB_PATH)
-    print("✅ Old database deleted")
+    try:
+        os.remove(DB_PATH)
+        print(f"✅ Old database deleted: {DB_PATH}")
+    except PermissionError:
+        print("❌ Database is locked. Please stop the backend server first (Ctrl+C)")
+        exit(1)
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -161,6 +166,23 @@ cursor.execute('''
     )
 ''')
 
+# Saved timetables table (for sharing)
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS saved_timetables (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        branch TEXT,
+        year INTEGER,
+        section TEXT,
+        timetable_data TEXT,
+        generated_by INTEGER,
+        generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT 1,
+        FOREIGN KEY (generated_by) REFERENCES users(id)
+    )
+''')
+
+print("✅ Tables created")
+
 # ============ INSERT SAMPLE DATA ============
 
 # 1. Users (with hashed passwords)
@@ -220,12 +242,12 @@ for code, name, desc, credits, hours, lab, dept, sem in courses:
 
 # 5. Course assignments
 assignments = [
-    (1, 1, 1, 3, '2024-2025', 3, 0, None, 1),  # BEE101 - Abhijeet - SEA
-    (1, 1, 2, 3, '2024-2025', 3, 0, None, 1),  # BEE101 - Abhijeet - SEB
-    (2, 2, 1, 3, '2024-2025', 4, 0, None, 2),  # MATH201 - Subhit - SEA
-    (2, 2, 2, 3, '2024-2025', 4, 0, None, 2),  # MATH201 - Subhit - SEB
-    (3, 1, 3, 5, '2024-2025', 4, 0, None, 2),  # CS201 - Abhijeet - TEA
-    (4, 1, 3, 5, '2024-2025', 2, 1, None, 3),  # CS201L - Abhijeet - TEA
+    (1, 1, 1, 3, '2024-2025', 3, 0, None, 1),
+    (1, 1, 2, 3, '2024-2025', 3, 0, None, 1),
+    (2, 2, 1, 3, '2024-2025', 4, 0, None, 2),
+    (2, 2, 2, 3, '2024-2025', 4, 0, None, 2),
+    (3, 1, 3, 5, '2024-2025', 4, 0, None, 2),
+    (4, 1, 3, 5, '2024-2025', 2, 1, None, 3),
 ]
 
 for course_id, teacher_id, group_id, sem, year, hours, lab, room, priority in assignments:
@@ -249,7 +271,7 @@ for code, name, cap, rtype, building, proj, ac in rooms:
         VALUES (?, ?, ?, ?, ?, ?, ?)
     ''', (code, name, cap, rtype, building, proj, ac))
 
-# 7. Time slots
+# 7. Time slots (Monday to Friday)
 days = [(0, 'Monday'), (1, 'Tuesday'), (2, 'Wednesday'), (3, 'Thursday'), (4, 'Friday')]
 times = [
     ('S1', '09:00', '10:00'), ('S2', '10:00', '11:00'), ('S3', '11:00', '12:00'),
@@ -260,10 +282,11 @@ times = [
 slot_id = 1
 for day_idx, day_name in days:
     for code, start, end in times:
+        is_break = 1 if code == "S4" else 0  # Lunch break at 12:00-13:00
         cursor.execute('''
             INSERT OR IGNORE INTO time_slots (id, slot_code, slot_name, day_of_week, day_name, start_time, end_time, is_break)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (slot_id, f"{day_name[:3]}{code}", f"{day_name[:3]} {start}-{end}", day_idx, day_name, start, end, 0))
+        ''', (slot_id, f"{day_name[:3]}{code}", f"{day_name[:3]} {start}-{end}", day_idx, day_name, start, end, is_break))
         slot_id += 1
 
 conn.commit()
@@ -282,4 +305,5 @@ print("\n📊 Tables created:")
 print("   - users, teachers, student_groups")
 print("   - courses, course_assignments")
 print("   - rooms, time_slots, timetable_entries")
+print("   - saved_timetables")
 print("=" * 50)
