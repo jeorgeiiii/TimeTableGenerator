@@ -50,12 +50,18 @@ const SignupPage = () => {
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
+    username: "",
     password: "",
     department: "CSE"
   });
 
   const config = roleConfig[selectedRole] || roleConfig.student;
   const Icon = config.icon;
+
+  // Student usernames must start with "st", teacher with "te" - admin has no
+  // required prefix. Backend enforces the same rule; this just gives
+  // immediate feedback instead of a round-trip.
+  const requiredPrefix = selectedRole === "student" ? "st" : selectedRole === "teacher" ? "te" : null;
 
   const handleRoleChange = (role: string) => {
     setSelectedRole(role);
@@ -79,11 +85,15 @@ const SignupPage = () => {
       return;
     }
 
+    if (requiredPrefix && !formData.username.toLowerCase().startsWith(requiredPrefix)) {
+      setError(`${config.label} usernames must start with "${requiredPrefix}" (e.g. "${requiredPrefix}rahul")`);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const username = formData.email.split('@')[0];
-      
       const result = await authService.signup({
-        username: username,
+        username: formData.username,
         email: formData.email,
         password: formData.password,
         full_name: formData.full_name,
@@ -104,9 +114,9 @@ const SignupPage = () => {
       } else {
         setError(result.message || "Signup failed. Email may already exist.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Signup error:", err);
-      setError("Failed to signup,Maybe Email is already registered.");
+      setError(err?.response?.data?.detail || "Failed to signup. Email may already be registered.");
     } finally {
       setLoading(false);
     }
@@ -239,6 +249,27 @@ const SignupPage = () => {
                   required
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">Username</label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  placeholder={requiredPrefix ? `e.g. ${requiredPrefix}rahul` : "Choose a username"}
+                  className="w-full rounded-lg bg-card text-foreground border border-border pl-11 pr-4 py-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition"
+                  required
+                />
+              </div>
+              {requiredPrefix && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {config.label} usernames must start with "{requiredPrefix}"
+                </p>
+              )}
             </div>
 
             <div>

@@ -73,17 +73,18 @@ const Index = () => {
           <a href="#roles" className="hover:text-foreground transition">Login</a>
         </div>
 
-        {/* Login & Signup Buttons in Navbar */}
+        {/* Login & Signup Buttons in Navbar - scroll to role picker rather than
+            defaulting to student, so Teacher/Admin are just as discoverable */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/login/student")}
+            onClick={() => document.getElementById("roles")?.scrollIntoView({ behavior: "smooth" })}
             className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-all text-sm font-medium"
           >
             <LogIn className="w-4 h-4" />
             Login
           </button>
           <button
-            onClick={() => navigate("/signup/student")}
+            onClick={() => document.getElementById("roles")?.scrollIntoView({ behavior: "smooth" })}
             className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-primary to-accent text-primary-foreground hover:brightness-110 transition-all text-sm font-medium shadow-lg shadow-primary/20"
           >
             <UserPlus className="w-4 h-4" />

@@ -382,15 +382,98 @@ class TimetableScheduler:
         return True, []
     
     # ============ TIMETABLE GENERATION ============
-    
+
+    def _unassign_slot(self, course: 'Course', slot_id: str, room_id: str) -> None:
+        """Undo a single slot assignment made by assign_course_to_slot (used to roll
+        back a partially-placed lab block when one of its slots can't be placed)."""
+        teacher = self.teachers.get(course.teacher_id)
+        group = self.student_groups.get(course.group_id)
+        room = self.rooms.get(room_id)
+
+        if teacher and teacher.schedule.get(slot_id) == course.id:
+            del teacher.schedule[slot_id]
+        if group and group.schedule.get(slot_id) == course.id:
+            del group.schedule[slot_id]
+        if room and room.schedule.get(slot_id) == course.id:
+            del room.schedule[slot_id]
+        if slot_id in course.assigned_slots:
+            course.assigned_slots.remove(slot_id)
+        if self.assignments and self.assignments[-1]['course_id'] == course.id \
+                and self.assignments[-1]['slot_id'] == slot_id:
+            self.assignments.pop()
+
+    def _room_priority_for(self, course: 'Course') -> List[str]:
+        room_priority = []
+        if course.preferred_room and course.preferred_room in self.rooms:
+            room_priority.append(course.preferred_room)
+        room_priority.extend([r for r in self.rooms.keys() if r != course.preferred_room])
+        return room_priority
+
+    def _assign_lab_course(self, course: 'Course', slots_by_day: Dict[int, List[str]],
+                            group_lab_days: Dict[str, set]) -> int:
+        """Assign a lab course as 2-hour consecutive blocks ("2 box" double periods),
+        placing at most one lab session per day for the group so sessions spread
+        across the week (e.g. 6 lab hours -> 3 sessions on 3 different days)."""
+        hours_assigned = 0
+        used_days = group_lab_days.setdefault(course.group_id, set())
+        room_priority = self._room_priority_for(course)
+
+        remaining = course.hours_per_week
+        while remaining > 0:
+            block_size = 2 if remaining >= 2 else 1
+
+            # Prefer days this group has no lab on yet, so sessions spread out
+            # one-per-day instead of stacking on the same day.
+            day_order = [d for d in slots_by_day if d not in used_days]
+
+            block_assigned = False
+            for day in day_order:
+                day_slots = slots_by_day[day]
+
+                for i in range(len(day_slots) - block_size + 1):
+                    candidate_slots = day_slots[i:i + block_size]
+
+                    for room_id in room_priority:
+                        if room_id not in self.rooms:
+                            continue
+
+                        placed = []
+                        ok = True
+                        for slot_id in candidate_slots:
+                            success, _ = self.assign_course_to_slot(course, slot_id, room_id)
+                            if not success:
+                                ok = False
+                                break
+                            placed.append(slot_id)
+
+                        if ok:
+                            hours_assigned += len(placed)
+                            remaining -= len(placed)
+                            used_days.add(day)
+                            block_assigned = True
+                            break
+                        else:
+                            for slot_id in reversed(placed):
+                                self._unassign_slot(course, slot_id, room_id)
+
+                    if block_assigned:
+                        break
+                if block_assigned:
+                    break
+
+            if not block_assigned:
+                break  # no free day/room can fit this session - stop, leave remainder unassigned
+
+        return hours_assigned
+
     def generate_timetable(self, priority_order: str = "lab") -> Dict:
         """Generate timetable using priority-based assignment"""
-        
+
         # Clear previous schedules
         self.clear_all_schedules()
         self.conflicts = []
         self.assignments = []
-        
+
         # Sort courses by priority
         if priority_order == "lab":
             # Labs first
@@ -404,49 +487,63 @@ class TimetableScheduler:
         elif priority_order == "hours":
             # Courses with more hours first
             self.courses.sort(key=lambda c: (-c.hours_per_week, -c.priority))
-        
+
         assigned_count = 0
         total_hours = sum(c.hours_per_week for c in self.courses)
         failed_courses = []
-        
+
+        # Slots grouped by day, ordered by start time, so lab blocks can be
+        # placed as consecutive same-day pairs ("2 box" double periods).
+        slots_by_day: Dict[int, List[str]] = {}
+        for slot_id, slot in self.time_slots.items():
+            slots_by_day.setdefault(slot.day, []).append(slot_id)
+        for day in slots_by_day:
+            slots_by_day[day].sort(key=lambda sid: self.time_slots[sid].start_time)
+
+        # Tracks which days already have a lab session for each group, so labs
+        # for that group land one-per-day and spread across the week.
+        group_lab_days: Dict[str, set] = {}
+
         for course in self.courses:
             hours_assigned = 0
-            
-            # Try to assign each required hour
-            while hours_assigned < course.hours_per_week:
-                assigned = False
-                
-                # Try preferred room first if specified
-                room_priority = []
-                if course.preferred_room and course.preferred_room in self.rooms:
-                    room_priority.append(course.preferred_room)
-                room_priority.extend([r for r in self.rooms.keys() if r != course.preferred_room])
-                
-                for room_id in room_priority:
-                    if room_id not in self.rooms:
-                        continue
-                    
-                    # Try each time slot
-                    for slot_id in self.time_slots.keys():
-                        success, _ = self.assign_course_to_slot(course, slot_id, room_id)
-                        if success:
-                            assigned = True
-                            assigned_count += 1
-                            hours_assigned += 1
+
+            if course.is_lab:
+                hours_assigned = self._assign_lab_course(course, slots_by_day, group_lab_days)
+                assigned_count += hours_assigned
+            else:
+                # Try to assign each required hour
+                while hours_assigned < course.hours_per_week:
+                    assigned = False
+
+                    room_priority = self._room_priority_for(course)
+
+                    for room_id in room_priority:
+                        if room_id not in self.rooms:
+                            continue
+
+                        # Try each time slot
+                        for slot_id in self.time_slots.keys():
+                            success, _ = self.assign_course_to_slot(course, slot_id, room_id)
+                            if success:
+                                assigned = True
+                                assigned_count += 1
+                                hours_assigned += 1
+                                break
+
+                        if assigned:
                             break
-                    
-                    if assigned:
+
+                    if not assigned:
                         break
-                
-                if not assigned:
-                    failed_courses.append({
-                        'course_id': course.id,
-                        'course_name': course.name,
-                        'hours_assigned': hours_assigned,
-                        'hours_needed': course.hours_per_week
-                    })
-                    break
-        
+
+            if hours_assigned < course.hours_per_week:
+                failed_courses.append({
+                    'course_id': course.id,
+                    'course_name': course.name,
+                    'hours_assigned': hours_assigned,
+                    'hours_needed': course.hours_per_week
+                })
+
         return {
             'success': len(failed_courses) == 0,
             'assigned_count': assigned_count,
@@ -456,7 +553,7 @@ class TimetableScheduler:
             'conflicts': self.conflicts,
             'assignments': self.assignments
         }
-    
+
     # ============ GETTER METHODS ============
     
     def get_teacher_schedule(self, teacher_id: str) -> Dict:

@@ -1,6 +1,6 @@
 // frontend/src/pages/GenerateTimetable.tsx
 import { useState, useEffect, useCallback } from "react";
-import { BRANCHES, YEARS } from "@/lib/store";
+import { BRANCHES, YEARS, hasMultipleSections } from "@/lib/store";
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Download, Calendar, Loader2 } from "lucide-react";
@@ -42,6 +42,14 @@ const GenerateTimetable = () => {
   useEffect(() => {
     setSemester(availableSemesters[0]?.value || 1);
   }, [availableSemesters]);
+
+  // Only CSE/IT have multiple sections - everyone else is always Section A.
+  const showSectionField = hasMultipleSections(branch);
+  useEffect(() => {
+    if (!hasMultipleSections(branch)) {
+      setSection("A");
+    }
+  }, [branch]);
 
   const loadTimetable = useCallback(async () => {
     setLoading(true);
@@ -192,17 +200,19 @@ const GenerateTimetable = () => {
             </p>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium mb-1">Section</label>
-            <input 
-              type="text" 
-              value={section} 
-              onChange={e => setSection(e.target.value.toUpperCase())}
-              placeholder="A"
-              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-            />
-          </div>
-          
+          {showSectionField && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Section</label>
+              <input
+                type="text"
+                value={section}
+                onChange={e => setSection(e.target.value.toUpperCase())}
+                placeholder="A"
+                className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+            </div>
+          )}
+
           <div className="flex gap-2 items-end">
             <button 
               onClick={handleGenerate}

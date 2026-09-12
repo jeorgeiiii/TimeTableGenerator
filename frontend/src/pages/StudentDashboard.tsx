@@ -1,6 +1,6 @@
 // frontend/src/pages/StudentDashboard.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { BRANCHES, YEARS } from '@/lib/store';
+import { BRANCHES, YEARS, hasMultipleSections } from '@/lib/store';
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Download, Eye, Loader2, Menu, RefreshCw } from "lucide-react";
@@ -14,8 +14,8 @@ const yearStringToNumber = (y: string): number => {
   return isNaN(n) ? 1 : n;
 };
 
-// Helper: year number → semester (Year 1 → Sem 1, Year 2 → Sem 3, etc.)
-const yearToSemester = (y: number): number => (y - 1) * 2 + 1;
+// Semester options for a given year (Year 1 -> Sem 1/2, Year 2 -> Sem 3/4, ...)
+const getSemesterOptions = (y: number): number[] => [y * 2 - 1, y * 2];
 
 // Check whether the timetable matrix has any real class (not just "—" or lunch)
 const hasTimetableData = (tt: TimetableData | null): boolean => {
@@ -31,6 +31,7 @@ const hasTimetableData = (tt: TimetableData | null): boolean => {
 const StudentDashboard: React.FC = () => {
   const [branch,   setBranch]   = useState("CSE");
   const [year,     setYear]     = useState("1st Year");
+  const [semester, setSemester] = useState<number>(1);
   const [section,  setSection]  = useState("A");
   const [timetable, setTimetable] = useState<TimetableData | null>(null);
   const [loading,  setLoading]  = useState(false);
@@ -39,12 +40,23 @@ const StudentDashboard: React.FC = () => {
 
   const user = authService.getCurrentUser();
 
+  // Only CSE/IT have multiple sections - everyone else is always Section A.
+  const showSectionField = hasMultipleSections(branch);
+  useEffect(() => {
+    if (!hasMultipleSections(branch)) {
+      setSection("A");
+    }
+  }, [branch]);
+
+  // Reset semester to the first one for this year whenever year changes.
+  useEffect(() => {
+    setSemester(getSemesterOptions(yearStringToNumber(year))[0]);
+  }, [year]);
+
   const loadTimetable = useCallback(async () => {
     setLoading(true);
     try {
       const yearNumber = yearStringToNumber(year);
-      // FIX: pass semester derived from year so the backend query matches saved data
-      const semester = yearToSemester(yearNumber);
       const data = await timetableService.viewTimetable(branch, yearNumber, section, semester);
       setTimetable(data);
 
@@ -61,7 +73,7 @@ const StudentDashboard: React.FC = () => {
       setLoading(false);
       setHasLoaded(true);
     }
-  }, [branch, section, year]);
+  }, [branch, section, year, semester]);
 
   // Auto-load on mount with the default selection
   useEffect(() => {
@@ -139,7 +151,7 @@ const StudentDashboard: React.FC = () => {
             <div className="bg-card/60 backdrop-blur-md rounded-xl p-8 border border-border">
               <h2 className="text-2xl font-bold mb-6">👁️ View Your Timetable</h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 {/* Branch */}
                 <div>
                   <label className="block text-sm font-medium mb-1">Branch</label>
@@ -164,18 +176,34 @@ const StudentDashboard: React.FC = () => {
                   </select>
                 </div>
 
-                {/* Section */}
+                {/* Semester */}
                 <div>
-                  <label className="block text-sm font-medium mb-1">Section</label>
-                  <input
-                    type="text"
-                    value={section}
-                    onChange={e => setSection(e.target.value.toUpperCase())}
-                    placeholder="A"
-                    maxLength={2}
+                  <label className="block text-sm font-medium mb-1">Semester</label>
+                  <select
+                    value={semester}
+                    onChange={e => setSemester(parseInt(e.target.value))}
                     className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-                  />
+                  >
+                    {getSemesterOptions(yearStringToNumber(year)).map(s => (
+                      <option key={s} value={s}>Semester {s}</option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Section - only CSE/IT run multiple sections */}
+                {showSectionField && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Section</label>
+                    <input
+                      type="text"
+                      value={section}
+                      onChange={e => setSection(e.target.value.toUpperCase())}
+                      placeholder="A"
+                      maxLength={2}
+                      className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
+                    />
+                  </div>
+                )}
 
                 {/* Action buttons */}
                 <div className="flex gap-2 items-end">

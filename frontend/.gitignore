@@ -217,14 +217,14 @@ docker-compose.override.yml
 # ============================================
 # Build outputs
 # ============================================
-build/
-develop-eggs/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-sdist/
-wheels/
+/build/
+/develop-eggs/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/sdist/
+/wheels/
 *.whl
 *.egg-info/

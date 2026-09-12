@@ -1,24 +1,42 @@
 // frontend/src/pages/ViewTimetable.tsx
 import { useState, useEffect, useCallback } from "react";
-import { BRANCHES, YEARS } from "@/lib/store";
+import { BRANCHES, YEARS, hasMultipleSections } from "@/lib/store";
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Download, Eye, Loader2 } from "lucide-react";
 import timetableService, { TimetableData } from '../services/timetable_service';
 
+// Semester options based on year (year 1 -> sem 1/2, year 2 -> sem 3/4, ...)
+const getSemesterOptions = (yearNumber: number): number[] => [yearNumber * 2 - 1, yearNumber * 2];
+
 const ViewTimetable = () => {
   const [branch, setBranch] = useState("CSE");
   const [year, setYear] = useState("1st Year");
+  const [semester, setSemester] = useState<number>(1);
   const [section, setSection] = useState("A");
   const [timetable, setTimetable] = useState<TimetableData | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Only CSE/IT have multiple sections - everyone else is always Section A.
+  const showSectionField = hasMultipleSections(branch);
+  useEffect(() => {
+    if (!hasMultipleSections(branch)) {
+      setSection("A");
+    }
+  }, [branch]);
+
+  // Reset semester to the first one for this year whenever year changes.
+  useEffect(() => {
+    const yearNumber = parseInt(year.replace(/\D/g, ''));
+    setSemester(getSemesterOptions(yearNumber)[0]);
+  }, [year]);
 
   const loadTimetable = useCallback(async () => {
     setLoading(true);
     try {
       // Convert "1st Year" to 1, "2nd Year" to 2, etc.
       const yearNumber = parseInt(year.replace(/\D/g, ''));
-      const data = await timetableService.viewTimetable(branch, yearNumber, section);
+      const data = await timetableService.viewTimetable(branch, yearNumber, section, semester);
       setTimetable(data);
       if (data.branch) {
         toast.success("Timetable loaded!");
@@ -29,7 +47,7 @@ const ViewTimetable = () => {
     } finally {
       setLoading(false);
     }
-  }, [branch, section, year]);
+  }, [branch, section, year, semester]);
 
   const exportToExcel = () => {
     if (!timetable) return;
@@ -77,11 +95,11 @@ const ViewTimetable = () => {
       <div className="bg-card/60 backdrop-blur-md rounded-xl p-8 border border-border">
         <h2 className="text-2xl font-bold mb-6">👁️ View Timetable</h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div>
             <label className="block text-sm font-medium mb-1">Branch</label>
-            <select 
-              value={branch} 
+            <select
+              value={branch}
               onChange={e => setBranch(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             >
@@ -90,8 +108,8 @@ const ViewTimetable = () => {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Year</label>
-            <select 
-              value={year} 
+            <select
+              value={year}
               onChange={e => setYear(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             >
@@ -99,15 +117,29 @@ const ViewTimetable = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Section</label>
-            <input 
-              type="text" 
-              value={section} 
-              onChange={e => setSection(e.target.value.toUpperCase())}
-              placeholder="A"
+            <label className="block text-sm font-medium mb-1">Semester</label>
+            <select
+              value={semester}
+              onChange={e => setSemester(parseInt(e.target.value))}
               className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-            />
+            >
+              {getSemesterOptions(parseInt(year.replace(/\D/g, ''))).map(s => (
+                <option key={s} value={s}>Semester {s}</option>
+              ))}
+            </select>
           </div>
+          {showSectionField && (
+            <div>
+              <label className="block text-sm font-medium mb-1">Section</label>
+              <input
+                type="text"
+                value={section}
+                onChange={e => setSection(e.target.value.toUpperCase())}
+                placeholder="A"
+                className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
+              />
+            </div>
+          )}
           <div className="flex gap-2 items-end">
             <button 
               onClick={loadTimetable}
@@ -133,7 +165,7 @@ const ViewTimetable = () => {
       {timetable && timetable.days && (
         <div className="bg-card/60 backdrop-blur-md rounded-xl p-8 border border-border overflow-x-auto">
           <h3 className="text-lg font-bold mb-4">
-            {timetable.branch} - {timetable.year} - Section {timetable.section}
+            {timetable.branch} - {timetable.year} - Semester {timetable.semester} - Section {timetable.section}
           </h3>
           <table className="w-full text-sm border-collapse">
             <thead>

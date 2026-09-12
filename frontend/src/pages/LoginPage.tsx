@@ -70,8 +70,11 @@ const LoginPage = () => {
       } else {
         setError("Invalid username or password");
       }
-    } catch (err: unknown) {
-      if (err instanceof Error) {
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      if (detail) {
+        setError(detail);
+      } else if (err instanceof Error) {
         setError(err.message);
       } else {
         setError("Login failed. Please try again.");

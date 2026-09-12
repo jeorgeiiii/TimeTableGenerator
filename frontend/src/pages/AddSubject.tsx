@@ -1,15 +1,8 @@
 // frontend/src/pages/AddSubject.tsx
-import { useState, useEffect, useCallback } from "react";
-import { BRANCHES, YEARS } from "@/lib/store";
+import { useState, useEffect } from "react";
+import { BRANCHES } from "@/lib/store";
 import { toast } from "sonner";
 import api from "../services/api";
-
-interface Teacher {
-  id: string | number;
-  name: string;
-  department?: string;
-  email?: string;
-}
 
 const AddSubject = () => {
   const [code, setCode] = useState("");
@@ -20,10 +13,9 @@ const AddSubject = () => {
   const [credits, setCredits] = useState(3);
   const [hours, setHours] = useState(3);
   const [isLab, setIsLab] = useState(false);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [teacherId, setTeacherId] = useState<number | null>(null);
-  const [teacher2Id, setTeacher2Id] = useState<number | null>(null);
+  const [isElective, setIsElective] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingCurriculum, setLoadingCurriculum] = useState(false);
 
   // Semester options based on year
   const getSemesterOptions = () => {
@@ -34,25 +26,6 @@ const AddSubject = () => {
     return [1, 2];
   };
 
-  const loadTeachers = useCallback(async () => {
-    try {
-      const response = await api.get("/admin/teachers");
-      console.log("Teachers loaded:", response.data.teachers);
-      setTeachers(response.data.teachers || []);
-      
-      if (response.data.teachers?.length === 0) {
-        toast.warning("No teachers found. Please add a teacher first.");
-      }
-    } catch (error) {
-      console.error("Error loading teachers:", error);
-      toast.error("Failed to load teachers list");
-    }
-  }, []);
-
-  useEffect(() => {
-    loadTeachers();
-  }, [loadTeachers]);
-
   // Reset semester when year changes
   useEffect(() => {
     const semesters = getSemesterOptions();
@@ -61,7 +34,7 @@ const AddSubject = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!code) {
       toast.error("Subject Code is required");
       return;
@@ -74,50 +47,47 @@ const AddSubject = () => {
       toast.error("Branch is required");
       return;
     }
-    if (!teacherId) {
-      toast.error("Please select a Primary Teacher");
-      return;
-    }
-    
+
     setLoading(true);
-    
+
     try {
       const token = localStorage.getItem('token');
-      
+
       const requestData = {
         code: code.toUpperCase(),
         name: name,
         branch: branch,
         year: year,
         semester: semester,
-        teacher_id: teacherId,
-        teacher2_id: teacher2Id
+        credits: credits,
+        hours_per_week: hours,
+        is_lab: isLab,
+        is_elective: isElective,
       };
-      
+
       console.log("Sending subject data:", JSON.stringify(requestData, null, 2));
-      
+
       const response = await api.post("/admin/subjects", requestData, {
-        headers: { 
+        headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      
+
       console.log("Response:", response.data);
-      
+
       if (response.data.success) {
-        toast.success(`Subject "${name}" added successfully!`);
+        toast.success(`Subject "${name}" added successfully! Use Assign Subject to give it a teacher.`);
         // Reset form
         setCode("");
         setName("");
         setBranch("");
         setYear(1);
         setSemester(1);
-        setTeacherId(null);
-        setTeacher2Id(null);
         setCredits(3);
         setHours(3);
         setIsLab(false);
+        setIsElective(false);
       } else {
         toast.error(response.data.message || "Failed to add subject");
       }
@@ -137,41 +107,74 @@ const AddSubject = () => {
     }
   };
 
+  const handleLoadCurriculum = async () => {
+    setLoadingCurriculum(true);
+    try {
+      const response = await api.post("/admin/subjects/load-curriculum", {
+        branch: branch || undefined,
+        year: branch ? year : undefined,
+      });
+      const { added, skipped } = response.data;
+      toast.success(`Loaded ${added} subject(s) from the official curriculum (${skipped} already existed).`);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.detail || "Failed to load curriculum";
+      toast.error(errorMsg);
+    } finally {
+      setLoadingCurriculum(false);
+    }
+  };
+
   return (
     <div className="bg-card/60 backdrop-blur-md rounded-xl p-8 border border-border">
       <h2 className="text-2xl font-bold mb-6">📚 Add New Subject</h2>
-      
-      {teachers.length === 0 && (
-        <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500 rounded-lg text-yellow-200">
-          ⚠️ No teachers found! Please go to "Add Teacher" first.
+
+      <div className="mb-6 p-4 rounded-lg bg-primary/10 border border-primary/30 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div>
+          <p className="font-medium">⚡ Auto-load official SGSITS subjects</p>
+          <p className="text-xs text-muted-foreground">
+            Fills in subjects from the built-in curriculum (no teacher assigned yet — use "Assign Subject" after).
+            Uses the Branch/Year selected below, or loads every branch if left blank.
+          </p>
         </div>
-      )}
-      
+        <button
+          type="button"
+          onClick={handleLoadCurriculum}
+          disabled={loadingCurriculum}
+          className="px-4 py-2 rounded-lg font-medium border border-primary/50 hover:bg-primary/20 disabled:opacity-50 whitespace-nowrap"
+        >
+          {loadingCurriculum ? "Loading..." : "Load Curriculum"}
+        </button>
+      </div>
+
+      <p className="mb-4 p-3 bg-muted/20 border border-border rounded-lg text-sm text-muted-foreground">
+        This only creates the subject record. Assign a teacher and section afterwards on the "Assign Subject" page.
+      </p>
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Subject Code *</label>
-            <input 
-              value={code} 
-              onChange={e => setCode(e.target.value.toUpperCase())} 
+            <input
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase())}
               placeholder="e.g., EE301, CS201"
-              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none" 
+              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Subject Name *</label>
-            <input 
-              value={name} 
-              onChange={e => setName(e.target.value)} 
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
               placeholder="e.g., Power System, Data Structures"
-              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none" 
+              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Branch *</label>
-            <select 
-              value={branch} 
-              onChange={e => setBranch(e.target.value)} 
+            <select
+              value={branch}
+              onChange={e => setBranch(e.target.value)}
               className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             >
               <option value="">Select Branch</option>
@@ -180,9 +183,9 @@ const AddSubject = () => {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Year *</label>
-            <select 
-              value={year} 
-              onChange={e => setYear(parseInt(e.target.value))} 
+            <select
+              value={year}
+              onChange={e => setYear(parseInt(e.target.value))}
               className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             >
               <option value="1">1st Year</option>
@@ -193,9 +196,9 @@ const AddSubject = () => {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Semester *</label>
-            <select 
-              value={semester} 
-              onChange={e => setSemester(parseInt(e.target.value))} 
+            <select
+              value={semester}
+              onChange={e => setSemester(parseInt(e.target.value))}
               className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             >
               {getSemesterOptions().map(s => (
@@ -210,66 +213,49 @@ const AddSubject = () => {
             </p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Primary Teacher *</label>
-            <select 
-              value={teacherId || ""} 
-              onChange={e => setTeacherId(e.target.value ? parseInt(e.target.value) : null)} 
-              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-            >
-              <option value="">Select Primary Teacher</option>
-              {teachers.map((t, idx) => (
-                <option key={`teacher-${t.id || idx}`} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Second Teacher (Optional)</label>
-            <select 
-              value={teacher2Id || ""} 
-              onChange={e => setTeacher2Id(e.target.value ? parseInt(e.target.value) : null)} 
-              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-            >
-              <option value="">Select Second Teacher</option>
-              {teachers.map((t, idx) => (
-                <option key={`teacher2-${t.id || idx}`} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="block text-sm font-medium mb-1">Credits</label>
-            <input 
-              type="number" 
-              value={credits} 
-              onChange={e => setCredits(Number(e.target.value))} 
+            <input
+              type="number"
+              value={credits}
+              onChange={e => setCredits(Number(e.target.value))}
               min="1"
               max="6"
-              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none" 
+              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Hours/Week</label>
-            <input 
-              type="number" 
-              value={hours} 
-              onChange={e => setHours(Number(e.target.value))} 
+            <input
+              type="number"
+              value={hours}
+              onChange={e => setHours(Number(e.target.value))}
               min="1"
               max="8"
-              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none" 
+              className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             />
           </div>
           <div className="flex items-center gap-3 pt-6">
-            <input 
-              type="checkbox" 
-              checked={isLab} 
-              onChange={e => setIsLab(e.target.checked)} 
-              className="w-4 h-4 rounded border-border" 
+            <input
+              type="checkbox"
+              checked={isLab}
+              onChange={e => setIsLab(e.target.checked)}
+              className="w-4 h-4 rounded border-border"
             />
             <label className="text-sm font-medium">Is Lab Course?</label>
           </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={isElective}
+              onChange={e => setIsElective(e.target.checked)}
+              className="w-4 h-4 rounded border-border"
+            />
+            <label className="text-sm font-medium">Is Elective?</label>
+          </div>
         </div>
-        <button 
-          type="submit" 
-          disabled={loading || teachers.length === 0}
+        <button
+          type="submit"
+          disabled={loading}
           className="px-6 py-2.5 rounded-lg text-primary-foreground font-medium disabled:opacity-50"
           style={{ background: "var(--gradient-nebula)" }}
         >

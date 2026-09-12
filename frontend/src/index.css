@@ -29,6 +29,17 @@
   --radius: 0.75rem;
   --gradient-nebula: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   --gradient-galaxy: radial-gradient(circle at center, #0a0a2a 0%, #1a1a3a 100%);
+
+  /* SpaceScene sun/star palette - referenced by tailwind.config.ts (sun.glow,
+     sun.core, sun.corona, space.deep, space.nebula, star.bright) and by
+     SpaceScene.tsx's raw hsl(var(--...)) gradients, but were never actually
+     defined - every one of those colors was silently invalid before this. */
+  --sun-core: 48 100% 92%;
+  --sun-glow: 38 100% 60%;
+  --sun-corona: 25 90% 48%;
+  --space-deep: 230 30% 4%;
+  --space-nebula: 260 55% 32%;
+  --star-bright: 0 0% 100%;
 }
 
 * {
@@ -126,8 +137,12 @@ body {
 }
 
 .twinkle {
-  animation: twinkle var(--duration, 3s) ease-in-out infinite;
-  animation-delay: var(--delay, 0s);
+  /* SpaceScene.tsx sets --twinkle-duration/--twinkle-delay inline per star -
+     this used to read --duration/--delay (never set by that component), so
+     every star silently used the same fallback 3s/0s instead of its own
+     randomized timing. */
+  animation: twinkle var(--twinkle-duration, 3s) ease-in-out infinite;
+  animation-delay: var(--twinkle-delay, 0s);
 }
 
 .float-animation {
