@@ -1,7 +1,8 @@
 // frontend/src/services/api.ts
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://timetablegenerator-1-23pq.onrender.com/api';
+// Trim whitespace and stray trailing dots/slashes (e.g. a pasted ".../api.").
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://timetablegenerator-1-23pq.onrender.com/api').trim().replace(/[./]+$/, '');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
