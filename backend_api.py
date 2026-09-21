@@ -599,6 +599,22 @@ EXTRA_CSE_TEACHERS = [
     ("Prof. Lata Chouhan",   "lata.chouhan@sgsits.edu",     "Data Structures Lab"),
 ]
 
+# 30 more, generated from name pools so every CSE section (1A, 1B, 2A, 2B, 3A,
+# 4A ... about 8 teachers each) can have completely separate teachers.
+_FIRST = ["Aarti", "Rohit", "Sneha", "Vivek", "Anita", "Suresh", "Neelam", "Tarun", "Ritu", "Mohit",
+          "Payal", "Sachin", "Komal", "Deepak", "Monika", "Yogesh", "Rashmi", "Ajay", "Seema", "Alok",
+          "Preeti", "Naveen", "Swati", "Rajesh", "Nidhi", "Ankit", "Shilpa", "Pankaj", "Garima", "Varun"]
+_LAST = ["Tripathi", "Chaturvedi", "Dubey", "Kulkarni", "Bansal", "Parmar", "Rathore", "Mehta", "Jha", "Shrivastava",
+         "Kapoor", "Nair", "Bhargava", "Dwivedi", "Khare", "Patidar", "Soni", "Tomar", "Vaidya", "Awasthi",
+         "Chourasia", "Dhakad", "Gour", "Holkar", "Iyer", "Joshi", "Kaushal", "Lodhi", "Mandloi", "Nagar"]
+_SPEC = ["Data Structures", "Algorithms", "DBMS", "Operating Systems", "Computer Networks", "Compiler Design",
+         "Machine Learning", "Web Technology", "Software Engineering", "Theory of Computation"]
+for _i in range(30):
+    EXTRA_CSE_TEACHERS.append((
+        f"Prof. {_FIRST[_i]} {_LAST[_i]}",
+        f"{_FIRST[_i].lower()}.{_LAST[_i].lower()}@sgsits.edu",
+        _SPEC[_i % len(_SPEC)]))
+
 
 def ensure_extra_cse_teachers(conn):
     """Adds spare CSE teachers so a second CSE section can be given its own
