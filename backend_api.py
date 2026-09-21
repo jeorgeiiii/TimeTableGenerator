@@ -570,6 +570,7 @@ def init_db():
 
     _insert_sample_data(cursor)
     conn.commit()
+    ensure_extra_cse_teachers(conn)
 
     # Must run AFTER _insert_sample_data, which is what actually creates the
     # time_slots rows on a brand-new database - both of these only edit rows
@@ -581,6 +582,34 @@ def init_db():
     conn.commit()
     conn.close()
     print("✅ Database initialized")
+
+
+EXTRA_CSE_TEACHERS = [
+    ("Dr. Ashok Malviya",    "ashok.malviya@sgsits.edu",    "Operating Systems"),
+    ("Dr. Rekha Solanki",    "rekha.solanki@sgsits.edu",    "Computer Networks"),
+    ("Prof. Manish Jain",    "manish.jain@sgsits.edu",      "Software Engineering"),
+    ("Prof. Pooja Agrawal",  "pooja.agrawal@sgsits.edu",    "Discrete Mathematics"),
+    ("Prof. Nitin Bhatt",    "nitin.bhatt@sgsits.edu",      "Computer Organization"),
+    ("Prof. Shweta Mishra",  "shweta.mishra@sgsits.edu",    "Programming Lab"),
+    ("Dr. Harish Chandra",   "harish.chandra@sgsits.edu",   "Digital Electronics"),
+    ("Prof. Divya Saxena",   "divya.saxena@sgsits.edu",     "Engineering Economics"),
+    ("Prof. Gaurav Pandey",  "gaurav.pandey@sgsits.edu",    "Microprocessors"),
+    ("Prof. Kirti Vyas",     "kirti.vyas@sgsits.edu",       "Professional Ethics"),
+    ("Prof. Sameer Qureshi", "sameer.qureshi@sgsits.edu",   "Electronics Workshop"),
+    ("Prof. Lata Chouhan",   "lata.chouhan@sgsits.edu",     "Data Structures Lab"),
+]
+
+
+def ensure_extra_cse_teachers(conn):
+    """Adds spare CSE teachers so a second CSE section can be given its own
+    teachers instead of competing with section A for the same ones.
+    Idempotent (email is unique)."""
+    cursor = conn.cursor()
+    for name, email, spec in EXTRA_CSE_TEACHERS:
+        cursor.execute(
+            "INSERT OR IGNORE INTO teachers (name,email,department,designation,specialization,max_hours_per_day,max_hours_per_week,is_active) VALUES (?,?,?,?,?,6,24,1)",
+            (name, email, "CSE", "Assistant Professor", spec))
+    conn.commit()
 
 
 def _insert_sample_data(cursor):
@@ -1892,6 +1921,37 @@ async def get_branches():
 # ============================================================
 # TIMETABLE GENERATION
 # ============================================================
+def _assign_own_teachers(cursor, group_id: int, department: str, source: list) -> None:
+    """Copy `source` course assignments onto `group_id`, giving every course a
+    different teacher than the source section's, and a different teacher from
+    each other wherever the department has enough teachers."""
+    seen_courses = set()
+    courses = []
+    for a in source:
+        if a["course_id"] not in seen_courses:
+            seen_courses.add(a["course_id"])
+            courses.append(a)
+
+    source_teachers = {a["tid"] for a in courses}
+    cursor.execute("SELECT teacher_id, COUNT(*) AS n FROM course_assignments GROUP BY teacher_id")
+    load = {r["teacher_id"]: r["n"] for r in cursor.fetchall()}
+    cursor.execute("SELECT id FROM teachers WHERE department=? AND is_active=1", (department,))
+    dept_teachers = sorted((r["id"] for r in cursor.fetchall()),
+                           key=lambda tid: (load.get(tid, 0), tid))
+    pool = [t for t in dept_teachers if t not in source_teachers]
+    fallback_pool = sorted(source_teachers)  # only if the dept has no spare teachers
+
+    for i, a in enumerate(courses):
+        tid = pool.pop(0) if pool else fallback_pool[i % len(fallback_pool)]
+        cursor.execute('''
+            INSERT INTO course_assignments
+                (course_id,teacher_id,group_id,semester,hours_per_week,theory_hours,lab_hours,is_lab,priority)
+            VALUES (?,?,?,?,?,?,?,?,?)
+        ''', (a["course_id"], tid, group_id, a["semester"], a["hours_per_week"],
+              a.get("theory_hours"), a.get("lab_hours"), 1 if a.get("course_is_lab") else 0,
+              a.get("priority") or 1))
+
+
 @app.post("/api/timetable/generate")
 async def generate_timetable(request: TimetableGenerateRequest, current_user=Depends(require_admin)):
     conn = get_db()
@@ -1933,7 +1993,25 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
                 WHERE sg.department=? AND ca.semester=?
                 ORDER BY ca.priority DESC
             ''', (request.branch, request.semester))
-            assignments = cursor.fetchall()
+            borrowed = [dict(r) for r in cursor.fetchall()]
+
+            # This section has no assignments of its own, so it would reuse
+            # another section's subjects AND teachers - and those teachers are
+            # already booked in the other section's slots, so half the classes
+            # can't be placed. Give this section the same subjects but its own
+            # teachers (least-loaded in the department, none of the source
+            # section's), saved as this group's real assignments.
+            if borrowed:
+                _assign_own_teachers(cursor, group_id, request.branch, borrowed)
+                cursor.execute('''
+                    SELECT ca.*, c.course_code, c.course_name, c.is_lab as course_is_lab, t.name as teacher_name, t.id as tid
+                    FROM course_assignments ca
+                    JOIN courses c ON ca.course_id=c.id
+                    JOIN teachers t ON ca.teacher_id=t.id
+                    WHERE ca.group_id=? AND ca.semester=?
+                    ORDER BY ca.priority DESC
+                ''', (group_id, request.semester))
+                assignments = cursor.fetchall()
 
         if not assignments:
             return {"success": False,
@@ -2058,11 +2136,14 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
         # session lands on a day, no other lab (same or different subject)
         # can also use that day for this group - one lab per day, period.
         group_lab_days: set = set()
+        lab_count_by_day: Dict[int, int] = {}
+        MAX_LABS_PER_DAY = 2
 
         for assignment in lab_assignments:
             teacher_id = assignment["tid"]
             course_id = assignment["course_id"]
             sessions_placed = 0
+            course_lab_days: set = set()  # this lab course is never repeated on a day
 
             for session_idx in range(LAB_SESSIONS_PER_WEEK):
                 batch = LAB_BATCHES[session_idx % len(LAB_BATCHES)]
@@ -2074,16 +2155,20 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
                 # every single weekday with a lab (5 lab-courses/week needed
                 # across only 5 days), leaving no lab-free day at all - this
                 # guarantees at least one.
-                if len(group_lab_days) >= MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK:
-                    break
+                lab_day_cap_reached = len(group_lab_days) >= MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK
 
                 # Prefer days not adjacent to an existing lab day so labs
                 # spread out (Mon/Wed/Fri) instead of running on consecutive
                 # days; adjacent days remain a fallback when nothing else fits.
                 for day in sorted(slots_by_day.keys(),
-                                  key=lambda d: (any(abs(d - g) == 1 for g in group_lab_days), day_load[d], d)):
-                    if day in group_lab_days:
+                                  key=lambda d: (any(abs(d - g) == 1 for g in course_lab_days),
+                                                 lab_count_by_day.get(d, 0), day_load[d], d)):
+                    if day in course_lab_days:
                         continue
+                    if lab_count_by_day.get(day, 0) >= MAX_LABS_PER_DAY:
+                        continue
+                    if lab_day_cap_reached and day not in group_lab_days:
+                        continue  # keep at least one lab-free day
 
                     day_slots = slots_by_day[day]
                     for i in range(len(day_slots) - LAB_SESSION_SLOTS + 1):
@@ -2135,6 +2220,8 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
 
                         record_teacher_hours(teacher_id, day, LAB_SESSION_SLOTS)
                         group_lab_days.add(day)
+                        course_lab_days.add(day)
+                        lab_count_by_day[day] = lab_count_by_day.get(day, 0) + 1
                         day_load[day] += 1
                         sessions_placed += 1
                         placed = True
