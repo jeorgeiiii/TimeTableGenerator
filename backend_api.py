@@ -34,9 +34,11 @@ TIME_SLOTS = [
 LUNCH_SLOT = "13:00-14:00"
 
 # Fixed lab scheduling policy (also used by the capacity warning in assign_subject):
-# every lab course gets 3 sessions/week, each a 2-hour (2 consecutive slot) block.
+# every lab course gets 3 sessions/week, each a single 1-hour slot, so a lab
+# subject never appears twice back-to-back on the same day. (Set
+# LAB_SESSION_SLOTS = 2 to go back to 2-hour lab blocks.)
 LAB_SESSIONS_PER_WEEK = 3
-LAB_SESSION_SLOTS = 2
+LAB_SESSION_SLOTS = 1
 
 # No theory subject is scheduled more than this many periods/week, even if its
 # hours_per_week says more - a scheduling policy, like the lab one above, not
