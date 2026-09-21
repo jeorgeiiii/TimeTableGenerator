@@ -2390,6 +2390,42 @@ async def view_timetable_path(
 # ============================================================
 # CONFLICTS
 # ============================================================
+@app.get("/api/conflicts/rooms")
+async def scan_room_conflicts(_=Depends(require_admin)):
+    """
+    Safety-net scan, not part of the normal generation path: generate_timetable
+    already prevents a room from ever being double-booked (it pre-loads every
+    OTHER group's room+slot usage before assigning a new one), so this should
+    always come back empty. It exists purely to surface it clearly if it ever
+    doesn't - e.g. a future code change to the generator, or rows edited
+    directly in the database outside the app.
+    """
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT te.room_id, r.room_code, te.slot_id,
+                   ts.day_name, ts.start_time, ts.end_time,
+                   GROUP_CONCAT(DISTINCT sg.group_code) AS group_codes,
+                   GROUP_CONCAT(DISTINCT c.course_code) AS course_codes
+            FROM timetable_entries te
+            JOIN rooms r ON te.room_id = r.id
+            JOIN time_slots ts ON te.slot_id = ts.id
+            JOIN student_groups sg ON te.group_id = sg.id
+            JOIN courses c ON te.course_id = c.id
+            WHERE te.status = "scheduled"
+            GROUP BY te.room_id, te.slot_id
+            HAVING COUNT(DISTINCT te.group_id) > 1
+            ORDER BY ts.day_of_week, ts.start_time
+        ''')
+        conflicts = [dict(r) for r in cursor.fetchall()]
+        for c in conflicts:
+            c["group_codes"] = c["group_codes"].split(",") if c["group_codes"] else []
+            c["course_codes"] = c["course_codes"].split(",") if c["course_codes"] else []
+        return {"conflicts": conflicts, "count": len(conflicts)}
+    finally:
+        conn.close()
+
 @app.get("/api/conflicts")
 async def get_conflicts(resolved: bool = False, _=Depends(require_admin)):
     conn = get_db()
@@ -2411,6 +2447,37 @@ async def resolve_conflict(conflict_id: int, request: ConflictResolveRequest, _=
             raise HTTPException(status_code=404, detail="Conflict not found")
         conn.commit()
         return {"success": True, "message": "Conflict resolved"}
+    finally:
+        conn.close()
+
+
+# ============================================================
+# RESET
+# ============================================================
+@app.post("/api/admin/reset-timetables")
+async def reset_timetables(_=Depends(require_admin)):
+    """
+    Wipes every generated timetable entry across every branch/year/section, so
+    every room and slot goes back to fully free and can be assigned again from
+    scratch. Does not touch teachers, subjects, rooms, course assignments or
+    student_groups - only the generated schedule itself (timetable_entries),
+    the cached saved_timetables views of it, and conflict_log entries that
+    were only ever about that now-cleared schedule.
+    """
+    conn = get_db()
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM timetable_entries WHERE status="scheduled"')
+        cleared = cursor.fetchone()[0]
+        cursor.execute("DELETE FROM timetable_entries")
+        cursor.execute("UPDATE saved_timetables SET is_active=0")
+        cursor.execute("DELETE FROM conflict_log")
+        conn.commit()
+        return {
+            "success": True,
+            "message": f"Reset complete: {cleared} scheduled class(es) cleared. Every room and time slot is now free.",
+            "cleared": cleared,
+        }
     finally:
         conn.close()
 

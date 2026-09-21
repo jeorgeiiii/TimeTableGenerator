@@ -1,5 +1,5 @@
 // frontend/src/components/AppSidebar.tsx
-import { Home, UserPlus, BookOpen, Link, LayoutGrid, Zap, Eye, LogOut } from "lucide-react";
+import { Home, UserPlus, BookOpen, Link, LayoutGrid, Zap, Eye, Settings, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import authService from "../services/auth.service";
 
@@ -11,6 +11,7 @@ const menuItems = [
   { id: "create-section", label: "Create Section", icon: LayoutGrid },
   { id: "generate-timetable", label: "Generate Timetable", icon: Zap },
   { id: "view-timetable", label: "View Timetable", icon: Eye },
+  { id: "settings", label: "Settings", icon: Settings },
 ];
 
 interface Props {

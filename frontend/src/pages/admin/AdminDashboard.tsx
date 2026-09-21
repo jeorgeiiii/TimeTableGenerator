@@ -10,6 +10,7 @@ import AssignSubject from "../../pages/AssignSubject";
 import CreateSection from "../../pages/CreateSection";
 import GenerateTimetable from "../../pages/GenerateTimetable";
 import ViewTimetable from "../../pages/ViewTimetable";
+import AdminSettingsPanel from "../../pages/AdminSettingsPanel";
 import { useUsers, useAddTeacher, useAddSubject, useGenerateTimetable, queryKeys } from "../../services/queryService";
 import api from "../../services/api";
 
@@ -68,6 +69,8 @@ const AdminDashboard = () => {
         return <GenerateTimetable onSuccess={refreshAllData} />;
       case "view-timetable":
         return <ViewTimetable />;
+      case "settings":
+        return <AdminSettingsPanel onSuccess={refreshAllData} />;
       case "users":
         return (
           <div className="bg-white rounded-lg shadow p-6">
