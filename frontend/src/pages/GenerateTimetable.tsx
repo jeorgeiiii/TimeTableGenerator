@@ -282,7 +282,7 @@ const GenerateTimetable = () => {
                   <td className="py-3 px-3 font-medium border">{slot}</td>
                   {timetable.days?.map((day: string) => {
                     const cell = timetable.timetable[day][slot];
-                    const isLunch = slot === '12:00-13:00';
+                    const isLunch = slot === '13:00-14:00';
                     return (
                       <td key={day} className={`py-3 px-3 text-center border ${isLunch ? 'bg-yellow-500/10' : ''}`}>
                         {isLunch ? (
