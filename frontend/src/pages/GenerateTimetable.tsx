@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { BRANCHES, YEARS, hasMultipleSections } from "@/lib/store";
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
-import { Download, Calendar, Loader2 } from "lucide-react";
+import { Download, Calendar, Loader2, RotateCcw } from "lucide-react";
 import api from "../services/api";
 
 // Semester mapping based on year
@@ -34,6 +34,7 @@ const GenerateTimetable = () => {
   const [timetable, setTimetable] = useState<TimetableData | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Get available semesters based on selected year
   const availableSemesters = getSemestersForYear(year);
@@ -96,6 +97,23 @@ const GenerateTimetable = () => {
       setGenerating(false);
     }
   }, [branch, year, section, semester, loadTimetable]);
+
+  const handleReset = useCallback(async () => {
+    if (!confirm("This clears EVERY generated timetable (all branches, years and sections) so you can regenerate from scratch. Teachers, subjects and assignments are kept. Continue?")) {
+      return;
+    }
+    setResetting(true);
+    try {
+      const response = await api.post("/admin/reset-timetables");
+      toast.success(response.data.message || "Timetables reset");
+      await loadTimetable();
+    } catch (error: any) {
+      console.error("Reset error:", error);
+      toast.error(error?.response?.data?.detail || "Failed to reset timetables");
+    } finally {
+      setResetting(false);
+    }
+  }, [loadTimetable]);
 
   useEffect(() => {
     // Auto-load timetable when component mounts
@@ -222,6 +240,14 @@ const GenerateTimetable = () => {
             >
               {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
               {generating ? "Generating..." : "Generate"}
+            </button>
+            <button
+              onClick={handleReset}
+              disabled={resetting || generating}
+              className="px-4 py-2.5 rounded-lg bg-red-600 text-white font-medium flex items-center gap-2 hover:bg-red-700 transition disabled:opacity-50"
+            >
+              {resetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+              {resetting ? "Resetting..." : "Reset"}
             </button>
             {timetable && (
               <button 

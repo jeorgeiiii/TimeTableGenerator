@@ -2075,7 +2075,11 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
                 if len(group_lab_days) >= MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK:
                     break
 
-                for day in sorted(slots_by_day.keys(), key=lambda d: (day_load[d], d)):
+                # Prefer days not adjacent to an existing lab day so labs
+                # spread out (Mon/Wed/Fri) instead of running on consecutive
+                # days; adjacent days remain a fallback when nothing else fits.
+                for day in sorted(slots_by_day.keys(),
+                                  key=lambda d: (any(abs(d - g) == 1 for g in group_lab_days), day_load[d], d)):
                     if day in group_lab_days:
                         continue
 
@@ -2199,14 +2203,11 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
                 continue
 
             # Find the next assignment that still needs hours
-            # Pick the one with the most remaining hours (greedy fill), preferring
-            # a subject that hasn't already been used today; only repeat a
-            # subject on the same day if nothing else can fill this slot.
+            # Pick the one with the most remaining hours (greedy fill). A subject
+            # is never placed twice on the same day for this group.
             day_of_week = slot["day_of_week"]
             best_idx = None
             best_remaining = 0
-            fallback_idx = None
-            fallback_remaining = 0
             for i, assignment in enumerate(assignments):
                 if remaining[i] <= 0:
                     continue
@@ -2225,16 +2226,10 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
                     })
                     continue
                 if day_of_week in subject_days_used[i]:
-                    if remaining[i] > fallback_remaining:
-                        fallback_remaining = remaining[i]
-                        fallback_idx = i
                     continue
                 if remaining[i] > best_remaining:
                     best_remaining = remaining[i]
                     best_idx = i
-
-            if best_idx is None:
-                best_idx = fallback_idx
 
             if best_idx is None:
                 # No assignment can go here (all teachers busy or all done)
