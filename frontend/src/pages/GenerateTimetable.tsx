@@ -127,19 +127,33 @@ const GenerateTimetable = () => {
     const headerRow = ["Time / Day", ...timetable.days];
     excelData.push(headerRow);
     
-    for (const timeSlot of timetable.time_slots) {
+    const merges: XLSX.Range[] = [];
+    timetable.time_slots.forEach((timeSlot, slotIdx) => {
       const row: string[] = [timeSlot];
-      for (const day of timetable.days) {
-        let cellValue = timetable.timetable[day][timeSlot];
+      timetable.days.forEach((day, dayIdx) => {
+        const raw = timetable.timetable[day][timeSlot];
+        const prevRaw = slotIdx > 0 ? timetable.timetable[day][timetable.time_slots[slotIdx - 1]] : undefined;
+        const nextRaw = timetable.timetable[day][timetable.time_slots[slotIdx + 1]];
+        const isLab = !!raw && raw.includes('Lab');
+        let cellValue = raw;
         if (cellValue && cellValue.includes('<br>')) {
-          cellValue = cellValue.replace('<br>', ' - ');
+          cellValue = cellValue.replace(/<br>/g, ' - ');
         }
-        row.push(cellValue === '—' ? '' : cellValue);
-      }
+        if (isLab && prevRaw === raw) {
+          row.push(''); // second hour of a 2-hour lab: covered by the merged cell above
+        } else {
+          row.push(cellValue === '—' ? '' : cellValue);
+          // A 2-hour lab is one merged cell spanning both hours.
+          if (isLab && nextRaw === raw) {
+            merges.push({ s: { r: slotIdx + 1, c: dayIdx + 1 }, e: { r: slotIdx + 2, c: dayIdx + 1 } });
+          }
+        }
+      });
       excelData.push(row);
-    }
+    });
     
     const ws = XLSX.utils.aoa_to_sheet(excelData);
+    if (merges.length) ws['!merges'] = merges;
     ws['!cols'] = [{wch:15}, {wch:20}, {wch:20}, {wch:20}, {wch:20}, {wch:20}, {wch:20}];
     const wb = XLSX.utils.book_new();
     
