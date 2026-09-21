@@ -177,15 +177,22 @@ const ViewTimetable = () => {
               </tr>
             </thead>
             <tbody>
-              {timetable.time_slots.map((slot: string) => (
+              {timetable.time_slots.map((slot: string, idx: number) => (
                 <tr key={slot} className="border-b border-border/50 hover:bg-muted/20">
                   <td className="py-3 px-3 font-medium border">{slot}</td>
                   {timetable.days.map((day: string) => {
                     const dayData = timetable.timetable?.[day];
                     const cell = dayData?.[slot] || '—';
                     const isLunch = slot === '13:00-14:00';
+                    // A 2-hour lab fills two consecutive slots with the same
+                    // cell: draw it once, spanning both rows.
+                    const isLab = cell.includes('Lab');
+                    const prevCell = idx > 0 ? dayData?.[timetable.time_slots[idx - 1]] : undefined;
+                    const nextCell = dayData?.[timetable.time_slots[idx + 1]];
+                    if (isLab && prevCell === cell) return null;
+                    const rowSpan = isLab && nextCell === cell ? 2 : 1;
                     return (
-                      <td key={day} className={`py-3 px-3 text-center border ${isLunch ? 'bg-yellow-500/10' : ''}`}>
+                      <td key={day} rowSpan={rowSpan} className={`py-3 px-3 text-center border ${isLunch ? 'bg-yellow-500/10' : ''}`}>
                         {isLunch ? (
                           <span className="text-yellow-600 font-medium">🍽️ LUNCH BREAK</span>
                         ) : cell !== '—' ? (
