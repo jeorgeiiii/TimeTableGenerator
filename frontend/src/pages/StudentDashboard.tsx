@@ -1,12 +1,15 @@
 // frontend/src/pages/StudentDashboard.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { BRANCHES, YEARS, hasMultipleSections } from '@/lib/store';
+import { BRANCHES, YEARS } from '@/lib/store';
+import { useClassSections } from '@/hooks/use-class-sections';
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Download, Eye, Loader2, Menu, RefreshCw } from "lucide-react";
 import StarBackground from '../components/StarBackground';
 import authService from '../services/auth.service';
 import timetableService, { TimetableData } from '../services/timetable_service';
+import CreditSystem from './CreditSystem';
+import RoomSummary from '../components/RoomSummary';
 
 // Helper: convert "1st Year" / "2nd Year" etc. to an integer
 const yearStringToNumber = (y: string): number => {
@@ -37,16 +40,19 @@ const StudentDashboard: React.FC = () => {
   const [loading,  setLoading]  = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [view, setView] = useState<'timetable' | 'credits'>('timetable');
 
   const user = authService.getCurrentUser();
 
   // Only CSE/IT have multiple sections - everyone else is always Section A.
-  const showSectionField = hasMultipleSections(branch);
+  // Sections come from the class's own setup (Classes & Sections): a whole
+  // class is always section "A" and shows no section picker.
+  const { hasSections, sectionNames } = useClassSections(branch, yearStringToNumber(year));
+  const showSectionField = hasSections;
   useEffect(() => {
-    if (!hasMultipleSections(branch)) {
-      setSection("A");
-    }
-  }, [branch]);
+    if (!sectionNames.includes(section)) setSection(sectionNames[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionNames.join(",")]);
 
   // Reset semester to the first one for this year whenever year changes.
   useEffect(() => {
@@ -147,6 +153,19 @@ const StudentDashboard: React.FC = () => {
         <main className="p-6">
           <div className="space-y-6">
 
+            <div className="inline-flex rounded-lg border border-border bg-card/60 backdrop-blur-md p-1">
+              {([['timetable', '📅 Timetable'], ['credits', '🎓 Credit System']] as const).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setView(id)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition ${view === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {view === 'credits' ? <CreditSystem /> : (<>
             {/* Controls */}
             <div className="bg-card/60 backdrop-blur-md rounded-xl p-8 border border-border">
               <h2 className="text-2xl font-bold mb-6">👁️ View Your Timetable</h2>
@@ -194,14 +213,13 @@ const StudentDashboard: React.FC = () => {
                 {showSectionField && (
                   <div>
                     <label className="block text-sm font-medium mb-1">Section</label>
-                    <input
-                      type="text"
+                    <select
                       value={section}
-                      onChange={e => setSection(e.target.value.toUpperCase())}
-                      placeholder="A"
-                      maxLength={2}
+                      onChange={e => setSection(e.target.value)}
                       className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-                    />
+                    >
+                      {sectionNames.map(s => <option key={s} value={s}>Section {s}</option>)}
+                    </select>
                   </div>
                 )}
 
@@ -243,10 +261,11 @@ const StudentDashboard: React.FC = () => {
 
             {!loading && hasTimetableData(timetable) && timetable && (
               <div className="bg-card/60 backdrop-blur-md rounded-xl p-8 border border-border overflow-x-auto">
-                <h3 className="text-lg font-bold mb-4">
+                <h3 className="text-lg font-bold">
                   {timetable.branch} — Year {timetable.year} — Section {timetable.section}
                   {timetable.semester ? ` (Semester ${timetable.semester})` : ''}
                 </h3>
+                <RoomSummary timetable={timetable} />
 
                 <table className="w-full text-sm border-collapse">
                   <thead>
@@ -315,6 +334,7 @@ const StudentDashboard: React.FC = () => {
                 </button>
               </div>
             )}
+            </>)}
           </div>
         </main>
       </div>

@@ -1,10 +1,13 @@
 // frontend/src/pages/GenerateTimetable.tsx
 import { useState, useEffect, useCallback } from "react";
-import { BRANCHES, YEARS, hasMultipleSections } from "@/lib/store";
+import { BRANCHES, YEARS } from "@/lib/store";
+import { useClassSections, ALL_SECTIONS } from "@/hooks/use-class-sections";
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Download, Calendar, Loader2, RotateCcw } from "lucide-react";
 import api from "../services/api";
+import RoomSummary from "../components/RoomSummary";
+import SubjectCreditsPanel from "../components/SubjectCreditsPanel";
 
 // Semester mapping based on year
 const getSemestersForYear = (year: string) => {
@@ -39,18 +42,25 @@ const GenerateTimetable = () => {
   // Get available semesters based on selected year
   const availableSemesters = getSemestersForYear(year);
 
-  // Reset semester when year changes
+  // Reset semester when year changes. Keyed on `year`, not on
+  // availableSemesters - that array is rebuilt every render, so depending on
+  // it reset the semester on every render and picking Semester 2/4/6/8
+  // instantly snapped back to the first semester of the year.
   useEffect(() => {
-    setSemester(availableSemesters[0]?.value || 1);
-  }, [availableSemesters]);
+    setSemester(getSemestersForYear(year)[0]?.value || 1);
+  }, [year]);
 
-  // Only CSE/IT have multiple sections - everyone else is always Section A.
-  const showSectionField = hasMultipleSections(branch);
+  // One whole class -> always section "A", no field. Divided into
+  // sections -> pick one, or "All sections" to generate each in turn.
+  const { hasSections, sectionNames } = useClassSections(branch, parseInt(year));
+  const showSectionField = hasSections;
   useEffect(() => {
-    if (!hasMultipleSections(branch)) {
-      setSection("A");
-    }
-  }, [branch]);
+    if (!hasSections) setSection("A");
+    else if (section !== ALL_SECTIONS && !sectionNames.includes(section)) setSection(sectionNames[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSections, sectionNames.join(",")]);
+  // The section whose timetable is shown ("All sections" shows the first).
+  const viewSection = section === ALL_SECTIONS ? sectionNames[0] : section;
 
   const loadTimetable = useCallback(async () => {
     setLoading(true);
@@ -60,7 +70,7 @@ const GenerateTimetable = () => {
         params: {
           branch,
           year: yearNumber,
-          section,
+          section: viewSection,
           semester
         }
       });
@@ -71,32 +81,35 @@ const GenerateTimetable = () => {
     } finally {
       setLoading(false);
     }
-  }, [branch, year, section, semester]);
+  }, [branch, year, viewSection, semester]);
 
   const handleGenerate = useCallback(async () => {
     setGenerating(true);
     try {
       const yearNumber = parseInt(year);
-      const response = await api.post("/timetable/generate", {
-        branch,
-        year: yearNumber,
-        section,
-        semester
-      });
-
-      if (response.data.success) {
-        toast.success(response.data.message || "Timetable generated successfully");
-        await loadTimetable();
-      } else {
-        toast.error(response.data.message || "Generation failed");
+      const targets = section === ALL_SECTIONS ? sectionNames : [section];
+      for (const target of targets) {
+        const response = await api.post("/timetable/generate", {
+          branch,
+          year: yearNumber,
+          section: target,
+          semester
+        });
+        const label = hasSections ? `Section ${target}: ` : "";
+        if (response.data.success) {
+          toast.success(label + (response.data.message || "Timetable generated successfully"));
+        } else {
+          toast.error(label + (response.data.message || "Generation failed"));
+        }
       }
+      await loadTimetable();
     } catch (error) {
       console.error("Generation error:", error);
       toast.error("Failed to generate timetable");
     } finally {
       setGenerating(false);
     }
-  }, [branch, year, section, semester, loadTimetable]);
+  }, [branch, year, section, semester, sectionNames, hasSections, loadTimetable]);
 
   const handleReset = useCallback(async () => {
     if (!confirm("This clears EVERY generated timetable (all branches, years and sections) so you can regenerate from scratch. Teachers, subjects and assignments are kept. Continue?")) {
@@ -157,7 +170,7 @@ const GenerateTimetable = () => {
     ws['!cols'] = [{wch:15}, {wch:20}, {wch:20}, {wch:20}, {wch:20}, {wch:20}, {wch:20}];
     const wb = XLSX.utils.book_new();
     
-    let sheetName = `TT_${branch}_Y${year}_Sem${semester}_${section}`;
+    let sheetName = `TT_${branch}_Y${year}_Sem${semester}_${viewSection}`;
     if (sheetName.length > 31) {
       sheetName = sheetName.substring(0, 31);
     }
@@ -166,7 +179,7 @@ const GenerateTimetable = () => {
     
     let fileName = `Timetable_${branch}_Year${year}_Sem${semester}_Section${section}.xlsx`;
     if (fileName.length > 100) {
-      fileName = `TT_${branch}_Y${year}_S${semester}_${section}.xlsx`;
+      fileName = `TT_${branch}_Y${year}_S${semester}_${viewSection}.xlsx`;
     }
     
     XLSX.writeFile(wb, fileName);
@@ -235,13 +248,14 @@ const GenerateTimetable = () => {
           {showSectionField && (
             <div>
               <label className="block text-sm font-medium mb-1">Section</label>
-              <input
-                type="text"
+              <select
                 value={section}
-                onChange={e => setSection(e.target.value.toUpperCase())}
-                placeholder="A"
+                onChange={e => setSection(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-              />
+              >
+                {sectionNames.map(s => <option key={s} value={s}>Section {s}</option>)}
+                <option value={ALL_SECTIONS}>All sections</option>
+              </select>
             </div>
           )}
 
@@ -278,9 +292,10 @@ const GenerateTimetable = () => {
 
       {timetable && timetable.days?.length > 0 && (
         <div className="bg-card/60 backdrop-blur-md rounded-xl p-8 border border-border overflow-x-auto">
-          <h3 className="text-lg font-bold mb-4">
+          <h3 className="text-lg font-bold">
             {timetable.branch} - Year {timetable.year} - Semester {semester} - Section {timetable.section}
           </h3>
+          <RoomSummary timetable={timetable as any} />
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-gradient-to-r from-primary to-accent text-white">
@@ -333,6 +348,9 @@ const GenerateTimetable = () => {
           <p className="text-muted-foreground">No timetable entries found. Click Generate to create one.</p>
         </div>
       )}
+
+      {/* Every subject of this semester with its credits, teacher, periods and room */}
+      <SubjectCreditsPanel branch={branch} year={parseInt(year)} section={viewSection} semester={semester} refreshKey={timetable} />
     </div>
   );
 };

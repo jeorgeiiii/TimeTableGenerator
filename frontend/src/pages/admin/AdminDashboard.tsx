@@ -10,6 +10,7 @@ import AssignSubject from "../../pages/AssignSubject";
 import CreateSection from "../../pages/CreateSection";
 import GenerateTimetable from "../../pages/GenerateTimetable";
 import ViewTimetable from "../../pages/ViewTimetable";
+import CreditSystem from "../../pages/CreditSystem";
 import AdminSettingsPanel from "../../pages/AdminSettingsPanel";
 import { useUsers, useAddTeacher, useAddSubject, useGenerateTimetable, queryKeys } from "../../services/queryService";
 import api from "../../services/api";
@@ -69,6 +70,8 @@ const AdminDashboard = () => {
         return <GenerateTimetable onSuccess={refreshAllData} />;
       case "view-timetable":
         return <ViewTimetable />;
+      case "credit-system":
+        return <CreditSystem />;
       case "settings":
         return <AdminSettingsPanel onSuccess={refreshAllData} />;
       case "users":
@@ -182,8 +185,8 @@ const AdminDashboard = () => {
               </div>
               <div className="bg-card/60 backdrop-blur-md rounded-xl p-6 border border-border cursor-pointer hover:border-primary/50 transition-all" onClick={() => setActivePage("create-section")}>
                 <div className="text-4xl mb-3">📋</div>
-                <h3 className="text-lg font-bold text-white">Create Section</h3>
-                <p className="text-sm text-gray-300">Organize student groups</p>
+                <h3 className="text-lg font-bold text-white">Classes &amp; Sections</h3>
+                <p className="text-sm text-gray-300">Whole class or sections A, B, C…</p>
               </div>
               <div className="bg-card/60 backdrop-blur-md rounded-xl p-6 border border-border cursor-pointer hover:border-primary/50 transition-all" onClick={() => setActivePage("generate-timetable")}>
                 <div className="text-4xl mb-3">⚡</div>
@@ -194,6 +197,11 @@ const AdminDashboard = () => {
                 <div className="text-4xl mb-3">👁️</div>
                 <h3 className="text-lg font-bold text-white">View Timetable</h3>
                 <p className="text-sm text-gray-300">See generated schedules</p>
+              </div>
+              <div className="bg-card/60 backdrop-blur-md rounded-xl p-6 border border-border cursor-pointer hover:border-primary/50 transition-all" onClick={() => setActivePage("credit-system")}>
+                <div className="text-4xl mb-3">🎓</div>
+                <h3 className="text-lg font-bold text-white">Credit System</h3>
+                <p className="text-sm text-gray-300">Credits per subject &amp; semester, SGPA/CGPA</p>
               </div>
               <div className="bg-card/60 backdrop-blur-md rounded-xl p-6 border border-border cursor-pointer hover:border-primary/50 transition-all" onClick={() => setActivePage("users")}>
                 <div className="text-4xl mb-3">👥</div>

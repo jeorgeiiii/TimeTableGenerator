@@ -1,5 +1,5 @@
 // frontend/src/components/AppSidebar.tsx
-import { Home, UserPlus, BookOpen, Link, LayoutGrid, Zap, Eye, Settings, LogOut } from "lucide-react";
+import { Home, UserPlus, BookOpen, Link, LayoutGrid, Zap, Eye, GraduationCap, Settings, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import authService from "../services/auth.service";
 
@@ -8,9 +8,10 @@ const menuItems = [
   { id: "add-teacher", label: "Add Teacher", icon: UserPlus },
   { id: "add-subject", label: "Add Subject", icon: BookOpen },
   { id: "assign-subject", label: "Assign Subject", icon: Link },
-  { id: "create-section", label: "Create Section", icon: LayoutGrid },
+  { id: "create-section", label: "Classes & Sections", icon: LayoutGrid },
   { id: "generate-timetable", label: "Generate Timetable", icon: Zap },
   { id: "view-timetable", label: "View Timetable", icon: Eye },
+  { id: "credit-system", label: "Credit System", icon: GraduationCap },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 

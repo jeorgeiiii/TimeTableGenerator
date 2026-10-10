@@ -41,7 +41,7 @@ COMMON_YEAR1 = {
         ("Chemistry", 4, 4, False, False),
         ("Computer Programming (Intro to C / C++)", 3, 3, False, False),
         ("Fundamentals of Civil Engineering & Applied Mechanics", 3, 3, False, False),
-        ("Environmental Science", 2, 2, False, False),
+        ("Environmental Science", 0, 2, False, False),
     ],
 }
 
@@ -51,17 +51,17 @@ BRANCH_CURRICULUM = {
         2: {
             3: [
                 ("Mathematics - III", 4, 4, False, False),
-                ("Object Oriented Programming Systems (OOPS)", 3, 3, False, False),
-                ("Computer Architecture", 3, 3, False, False),
+                ("Object Oriented Programming Systems (OOPS)", 4, 4, False, False),
+                ("Computer Architecture", 4, 4, False, False),
                 ("Microprocessors and Microcontrollers", 3, 3, False, False),
                 ("Economics for Engineers", 2, 2, False, False),
                 ("Programming Practices Lab", 1, 2, True, False),
                 ("Electronics Workshop", 1, 2, True, False),
             ],
             4: [
-                ("Discrete Structures", 3, 3, False, False),
+                ("Discrete Structures", 4, 4, False, False),
                 ("Mathematics - IV", 4, 4, False, False),
-                ("Data Structures", 3, 3, False, False),
+                ("Data Structures", 4, 4, False, False),
                 ("Operating Systems", 3, 3, False, False),
                 ("Digital Communication", 3, 3, False, False),
                 ("Computer Workshop", 1, 2, True, False),
@@ -71,7 +71,7 @@ BRANCH_CURRICULUM = {
         },
         3: {
             5: [
-                ("Theory of Computation", 3, 3, False, False),
+                ("Theory of Computation", 4, 4, False, False),
                 ("Database Management Systems", 3, 3, False, False),
                 ("Computer Networks", 3, 3, False, False),
                 ("Agile Software Methodology / Software Engineering", 3, 3, False, False),
@@ -80,7 +80,7 @@ BRANCH_CURRICULUM = {
                 ("Computer Networks Lab", 1, 2, True, False),
             ],
             6: [
-                ("Compiler Design", 3, 3, False, False),
+                ("Compiler Design", 4, 4, False, False),
                 ("Design and Analysis of Algorithms", 3, 3, False, False),
                 ("Machine Learning", 3, 3, False, False),
                 ("Department Elective - II", 3, 3, False, True),
@@ -94,8 +94,8 @@ BRANCH_CURRICULUM = {
                 ("Information & Cloud Security", 3, 3, False, False),
                 ("Department Elective - III", 3, 3, False, True),
                 ("Open Elective - II", 3, 3, False, True),
-                ("Major Project (Phase - I)", 4, 6, True, False),
-                ("Industrial Training Evaluation", 1, 1, False, False),
+                ("Major Project (Phase - I)", 3, 6, True, False),
+                ("Industrial Training Evaluation", 2, 1, False, False),
             ],
             8: [
                 ("Department Elective - IV", 3, 3, False, True),
@@ -111,8 +111,8 @@ BRANCH_CURRICULUM = {
     "IT": {
         2: {
             3: [
-                ("Object Oriented Programming Systems (OOPS)", 3, 3, False, False),
-                ("Data Structures and Algorithms (DSA)", 3, 3, False, False),
+                ("Object Oriented Programming Systems (OOPS)", 4, 4, False, False),
+                ("Data Structures and Algorithms (DSA)", 4, 4, False, False),
                 ("Digital Electronics and Logic Design", 3, 3, False, False),
                 ("Data Structures Lab", 1, 2, True, False),
                 ("Digital Electronics Lab", 1, 2, True, False),
@@ -129,12 +129,12 @@ BRANCH_CURRICULUM = {
             5: [
                 ("Database Management Systems (DBMS)", 3, 3, False, False),
                 ("Computer Networks", 3, 3, False, False),
-                ("Operating Systems", 3, 3, False, False),
+                ("Operating Systems", 4, 4, False, False),
                 ("Database Management Systems Lab", 1, 2, True, False),
                 ("Computer Networks Lab", 1, 2, True, False),
             ],
             6: [
-                ("Theory of Computation / Compiler Design", 3, 3, False, False),
+                ("Theory of Computation / Compiler Design", 4, 4, False, False),
                 ("Web Technology and Web Services", 3, 3, False, False),
                 ("Design and Analysis of Algorithms (DAA)", 3, 3, False, False),
                 ("Web Technology Lab", 1, 2, True, False),
@@ -157,14 +157,14 @@ BRANCH_CURRICULUM = {
     "ECE": {
         2: {
             3: [
-                ("Electronic Devices and Circuits (EDC)", 3, 3, False, False),
+                ("Electronic Devices and Circuits (EDC)", 4, 4, False, False),
                 ("Digital Electronics / Switching Theory", 3, 3, False, False),
                 ("Network Analysis and Synthesis", 3, 3, False, False),
                 ("Electronic Devices Lab", 1, 2, True, False),
                 ("Digital Electronics Lab", 1, 2, True, False),
             ],
             4: [
-                ("Signals and Systems", 3, 3, False, False),
+                ("Signals and Systems", 4, 4, False, False),
                 ("Mathematics - III", 4, 4, False, False),
                 ("Object Oriented Programming (OOPs)", 3, 3, False, False),
                 ("Signals and Systems Lab", 1, 2, True, False),
@@ -181,7 +181,7 @@ BRANCH_CURRICULUM = {
             ],
             6: [
                 ("Control Systems", 3, 3, False, False),
-                ("Digital Signal Processing (DSP)", 3, 3, False, False),
+                ("Digital Signal Processing (DSP)", 4, 4, False, False),
                 ("Antenna and Wave Propagation", 3, 3, False, False),
                 ("VLSI / Embedded Systems Lab", 1, 2, True, False),
                 ("Control Systems Lab", 1, 2, True, False),
@@ -210,7 +210,7 @@ BRANCH_CURRICULUM = {
                 ("Digital Electronics Lab", 1, 2, True, False),
             ],
             4: [
-                ("Electrical Machines - I", 3, 3, False, False),
+                ("Electrical Machines - I", 4, 4, False, False),
                 ("Electromagnetic Fields", 3, 3, False, False),
                 ("Electrical Machines Lab", 1, 2, True, False),
                 ("Electromagnetic Fields Lab", 1, 2, True, False),
@@ -265,39 +265,39 @@ BRANCH_CURRICULUM = {
         2: {
             3: [
                 # ME26011 Fluid Mechanics (L4-P2)
-                ("Fluid Mechanics", 4, 4, False, False),
+                ("Fluid Mechanics", 3, 4, False, False),
                 ("Fluid Mechanics Lab", 1, 2, True, False),
                 # ME26002 Strength of Materials (L4-P2)
-                ("Strength of Materials", 4, 4, False, False),
+                ("Strength of Materials", 3, 4, False, False),
                 ("Strength of Materials Lab", 1, 2, True, False),
                 # MA26004 Mathematics - III (L4-T1)
                 ("Mathematics - III", 4, 5, False, False),
                 # ME26008 Material Science (L4-P2)
-                ("Material Science", 4, 4, False, False),
+                ("Material Science", 3, 4, False, False),
                 ("Material Science Lab", 1, 2, True, False),
                 # ME26005 Engineering Thermodynamics (L4-P2)
-                ("Engineering Thermodynamics", 4, 4, False, False),
+                ("Engineering Thermodynamics", 3, 4, False, False),
                 ("Engineering Thermodynamics Lab", 1, 2, True, False),
                 # HU26481 Values, Humanity and Professional Ethics (T3)
-                ("Values, Humanity and Professional Ethics", 3, 3, False, False),
+                ("Values, Humanity and Professional Ethics", 2, 3, False, False),
             ],
             4: [
                 # MA26556 Mathematics - IV (L4-T1)
                 ("Mathematics - IV", 4, 5, False, False),
                 # ME26551 Machine Design - I (L4-P2)
-                ("Machine Design - I", 4, 4, False, False),
+                ("Machine Design - I", 3, 4, False, False),
                 ("Machine Design - I Lab", 1, 2, True, False),
                 # ME26562 Kinematics of Machine (L4-P2)
-                ("Kinematics of Machine", 4, 4, False, False),
+                ("Kinematics of Machine", 3, 4, False, False),
                 ("Kinematics of Machine Lab", 1, 2, True, False),
                 # EC26563 Basic Electronics Engineering (L4-P2)
-                ("Basic Electronics Engineering", 4, 4, False, False),
+                ("Basic Electronics Engineering", 3, 4, False, False),
                 ("Basic Electronics Engineering Lab", 1, 2, True, False),
                 # IP26552 Manufacturing Processes - I (L4-P2)
-                ("Manufacturing Processes - I", 4, 4, False, False),
+                ("Manufacturing Processes - I", 3, 4, False, False),
                 ("Manufacturing Processes - I Lab", 1, 2, True, False),
                 # HU26507 Economics for Engineers (L4-P2)
-                ("Economics for Engineers", 4, 4, False, False),
+                ("Economics for Engineers", 2, 4, False, False),
                 ("Economics for Engineers Lab", 1, 2, True, False),
                 # ME26881 Machine Drawing & Computer Graphics (P2 only, lab-only course)
                 ("Machine Drawing & Computer Graphics", 1, 2, True, False),
@@ -309,32 +309,32 @@ BRANCH_CURRICULUM = {
                 ("Dynamics of Machines", 4, 5, False, False),
                 ("Dynamics of Machines Lab", 1, 2, True, False),
                 # ME36003 Measurement and Automatic Control (L4-P2)
-                ("Measurement and Automatic Control", 4, 4, False, False),
+                ("Measurement and Automatic Control", 3, 4, False, False),
                 ("Measurement and Automatic Control Lab", 1, 2, True, False),
                 # ME36006 Heat & Mass Transfer (L4-P2)
-                ("Heat & Mass Transfer", 4, 4, False, False),
+                ("Heat & Mass Transfer", 3, 4, False, False),
                 ("Heat & Mass Transfer Lab", 1, 2, True, False),
                 # ME36007 Steam and Gas Power System (L4, no lab)
-                ("Steam and Gas Power System", 4, 4, False, False),
+                ("Steam and Gas Power System", 3, 4, False, False),
                 # IP36062 Manufacturing Processes - II (L4-P2)
-                ("Manufacturing Processes - II", 4, 4, False, False),
+                ("Manufacturing Processes - II", 3, 4, False, False),
                 ("Manufacturing Processes - II Lab", 1, 2, True, False),
             ],
             6: [
                 # ME36501 Refrigeration and Air-conditioning (L4-P2)
-                ("Refrigeration and Air-conditioning", 4, 4, False, False),
+                ("Refrigeration and Air-conditioning", 3, 4, False, False),
                 ("Refrigeration and Air-conditioning Lab", 1, 2, True, False),
                 # ME36503 Machine Design II (L4-P4)
-                ("Machine Design II", 4, 4, False, False),
+                ("Machine Design II", 3, 4, False, False),
                 ("Machine Design II Lab", 2, 4, True, False),
                 # ME36506 Fluid Machinery (L4-P2)
-                ("Fluid Machinery", 4, 4, False, False),
+                ("Fluid Machinery", 3, 4, False, False),
                 ("Fluid Machinery Lab", 1, 2, True, False),
                 # ME36509 Internal Combustion Engines (L4-P2)
-                ("Internal Combustion Engines", 4, 4, False, False),
+                ("Internal Combustion Engines", 3, 4, False, False),
                 ("Internal Combustion Engines Lab", 1, 2, True, False),
                 # IP36504 Industrial Engineering and Production Management (L4, no lab)
-                ("Industrial Engineering and Production Management", 4, 4, False, False),
+                ("Industrial Engineering and Production Management", 3, 4, False, False),
                 # ME36581 Industrial Training / Minor Project (P4, project)
                 ("Industrial Training / Minor Project", 2, 4, True, False),
             ],
@@ -342,24 +342,24 @@ BRANCH_CURRICULUM = {
         4: {
             7: [
                 # ME46018 Automobile Engineering (L4-P2)
-                ("Automobile Engineering", 4, 4, False, False),
+                ("Automobile Engineering", 3, 4, False, False),
                 ("Automobile Engineering Lab", 1, 2, True, False),
                 # ME46051 Vibration and Noise Control (L4-P2)
-                ("Vibration and Noise Control", 4, 4, False, False),
+                ("Vibration and Noise Control", 3, 4, False, False),
                 ("Vibration and Noise Control Lab", 1, 2, True, False),
                 # ME46020 Computer Aided Design (L4-P2)
-                ("Computer Aided Design", 4, 4, False, False),
+                ("Computer Aided Design", 3, 4, False, False),
                 ("Computer Aided Design Lab", 1, 2, True, False),
                 # Elective-I: Mechatronics & Automation / Advanced Machine Design /
                 # Industrial Tribology & Maintenance / Design of AC Equipment /
                 # Artificial Intelligence / Power Plant & Energy Management
-                ("Department Elective - I", 4, 4, False, True),
+                ("Department Elective - I", 3, 4, False, True),
                 # Elective-II: Operational Research / Hydraulic-Pneumatic-Fluidic
                 # Control / Bio-Mechanics / Manufacturing Automation & CAM / Data
                 # Science
-                ("Department Elective - II", 4, 4, False, True),
+                ("Department Elective - II", 3, 4, False, True),
                 # ME46481 Industrial Training (no weekly contact hours - external)
-                ("Industrial Training", 0, 0, False, False),
+                ("Industrial Training", 2, 0, False, False),
                 # ME46498 Major Project Phase - I (P6, project)
                 ("Major Project - Phase I", 3, 6, True, False),
             ],
@@ -368,7 +368,7 @@ BRANCH_CURRICULUM = {
                 ("Department Elective - III", 3, 3, False, True),
                 ("Department Elective - IV", 3, 3, False, True),
                 # ME46882 Industrial Training / Internship (no weekly contact hours)
-                ("Industrial Training / Internship", 0, 0, False, False),
+                ("Industrial Training / Internship", 2, 0, False, False),
                 # ME46998 Major Project Phase - II (P8, project)
                 ("Major Project - Phase II", 4, 8, True, False),
                 # Added so this semester has >=2 lab-type entries, same as every
@@ -390,13 +390,13 @@ BRANCH_CURRICULUM = {
                 ("Surveying Lab", 1, 2, True, False),
                 ("Materials Testing Lab", 1, 2, True, False),
                 ("Building Materials & Construction", 3, 3, False, False),
-                ("Strength of Materials", 3, 3, False, False),
+                ("Strength of Materials", 4, 4, False, False),
                 ("Fluid Mechanics", 3, 3, False, False),
             ],
             4: [
                 ("Geotechnical Engineering Lab", 1, 2, True, False),
                 ("Surveying", 3, 3, False, False),
-                ("Structural Analysis - I", 3, 3, False, False),
+                ("Structural Analysis - I", 4, 4, False, False),
                 ("Concrete Technology", 3, 3, False, False),
                 ("Concrete Technology Lab", 1, 2, True, False),
             ],
@@ -405,14 +405,14 @@ BRANCH_CURRICULUM = {
             5: [
                 ("Structural Engineering Lab", 1, 2, True, False),
                 ("Transportation Engineering Lab", 1, 2, True, False),
-                ("Structural Analysis - II", 3, 3, False, False),
+                ("Structural Analysis - II", 4, 4, False, False),
                 ("Transportation Engineering", 3, 3, False, False),
                 ("Water Resources Engineering", 3, 3, False, False),
             ],
             6: [
                 ("Environmental Engineering Lab", 1, 2, True, False),
                 ("Environmental Engineering", 3, 3, False, False),
-                ("Design of RCC Structures", 3, 3, False, False),
+                ("Design of RCC Structures", 4, 4, False, False),
                 ("Estimation & Costing", 3, 3, False, False),
                 ("Estimation & Costing Lab", 1, 2, True, False),
             ],
@@ -437,7 +437,7 @@ BRANCH_CURRICULUM = {
             ],
             4: [
                 ("Instrumentation Lab", 1, 2, True, False),
-                ("Signals & Systems", 3, 3, False, False),
+                ("Signals & Systems", 4, 4, False, False),
                 ("Sensors & Transducers", 3, 3, False, False),
                 ("Analog Circuits", 3, 3, False, False),
                 ("Analog Circuits Lab", 1, 2, True, False),
@@ -514,7 +514,7 @@ BRANCH_CURRICULUM = {
         2: {
             3: [
                 ("Chemical Process Lab - I", 1, 2, True, False),
-                ("Chemical Process Calculations", 3, 3, False, False),
+                ("Chemical Process Calculations", 4, 4, False, False),
                 ("Fluid Flow Operations", 3, 3, False, False),
                 ("Mechanical Operations", 3, 3, False, False),
                 ("Fluid Flow Operations Lab", 1, 2, True, False),
@@ -531,7 +531,7 @@ BRANCH_CURRICULUM = {
             5: [
                 ("Heat Transfer Lab", 1, 2, True, False),
                 ("Mass Transfer Operations - I", 3, 3, False, False),
-                ("Chemical Reaction Engineering - I", 3, 3, False, False),
+                ("Chemical Reaction Engineering - I", 4, 4, False, False),
                 ("Chemical Process Equipment Design", 3, 3, False, False),
                 ("Chemical Reaction Engineering Lab - I", 1, 2, True, False),
             ],
@@ -568,7 +568,7 @@ BRANCH_CURRICULUM = {
             ],
             4: [
                 ("Industrial Engineering", 3, 3, False, False),
-                ("Operations Research", 3, 3, False, False),
+                ("Operations Research", 4, 4, False, False),
                 ("Quality Control & Reliability", 3, 3, False, False),
                 ("Industrial Engineering Lab", 1, 2, True, False),
                 ("CAD/CAM Lab", 1, 2, True, False),
@@ -603,9 +603,477 @@ BRANCH_CURRICULUM = {
 # per branch are added in teachers_data.py so every branch has someone
 # assignable to these.
 COMMON_YEAR2_ELECTIVES = [
-    ("Constitution of India", 2, 2, False, True),
+    ("Constitution of India", 0, 2, False, True),
     ("Economics for Engineers", 2, 2, False, True),
 ]
+
+
+# ============================================================
+# CREDIT-SYSTEM GAP FILL
+# Credits above follow SGSITS's own scheme rule (seen in the archived EE,
+# EI and E&TC schemes): a theory hour (L or T) = 1 credit, 2 practical hours
+# (P) = 1 credit, so an L3-P2 subject is "3 + 1" = 4 credits split across
+# its theory row and its "<Name> Lab" row. Environmental Science and
+# Constitution of India are mandatory non-credit audit courses (0 credits).
+#
+# With only the subjects above, most branches/semesters came out far below
+# SGSITS's real 19-26 credits/semester band (e.g. EE sem 4 had 9 credits).
+# The subjects below fill that gap so every semester lands in the band,
+# with each branch peaking in a different semester like the real schemes do
+# (EE: 21 / 22 / 23 in sem 3 / 4 / 5). Sources, in order of preference:
+#   1. SGSITS's own archived syllabi - EE III-year (EE32xxx) and EI
+#      II-IV-year (EI27xxx / EI37xxx / EI47xxx) subject titles and credits.
+#   2. MANIT Bhopal (NIT) B.Tech schemes 2024 - semester totals (CSE: 24 /
+#      22 / 24 / 20 / 19 / 15 for sem 3-8, 165 overall) and the common
+#      CBCS components every semester carries: department/open electives,
+#      minor projects (P4 = 2 credits), internship evaluation, major
+#      project, comprehensive viva.
+#   3. Standard AICTE model-curriculum subjects for the discipline, where
+#      neither of the above names one.
+# Appended AFTER each semester's existing subjects (and after the common
+# year-2 electives) so existing subject codes like "EE-S5-03" never shift.
+# ============================================================
+CURRICULUM_ADDITIONS = {
+    "*": {  # common first year, every branch
+        1: {
+            2: [
+                ("Computer Programming Lab", 1, 2, True, False),
+                ("Basic Electronics Engineering", 3, 3, False, False),
+                ("Engineering Workshop Practice", 2, 4, True, False),
+            ],
+        },
+    },
+    "CSE": {
+        2: {
+            3: [
+                ("Microprocessors and Microcontrollers Lab", 1, 2, True, False),
+            ],
+            4: [
+                ("Data Structures Lab", 1, 2, True, False),
+                ("Operating Systems Lab", 1, 2, True, False),
+            ],
+        },
+        3: {
+            5: [
+                ("Software Engineering Lab", 1, 2, True, False),
+                ("Minor Project - I", 2, 4, True, False),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+            ],
+            6: [
+                ("Compiler Design Lab", 1, 2, True, False),
+                ("Design and Analysis of Algorithms Lab", 1, 2, True, False),
+                ("Minor Project - II", 2, 4, True, False),
+            ],
+        },
+        4: {
+            7: [
+                ("Artificial Intelligence Lab", 1, 2, True, False),
+                ("Information Security Lab", 1, 2, True, False),
+            ],
+            8: [
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "EE": {
+        2: {
+            3: [
+                ("Mathematics - III", 4, 4, False, False),
+                ("Electrical Measurements & Instrumentation", 3, 3, False, False),
+                ("Analog Electronics Lab", 1, 2, True, False),
+            ],
+            4: [
+                ("Mathematics - IV / Numerical Methods", 4, 4, False, False),
+                ("Signals & Systems", 3, 3, False, False),
+                ("Values, Humanities and Professional Ethics", 2, 2, False, False),
+                ("Electrical Power Generation", 3, 3, False, False),
+            ],
+        },
+        3: {
+            5: [
+                # SGSITS EE III-year Sem A: EE32452, EE32499, EE32481, EE32282
+                ("Power Apparatus Design", 2, 4, True, False),
+                ("Open Elective - I", 3, 3, False, True),
+                ("Minor Project - I", 2, 4, True, False),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+                ("Basic Electrical Drive System", 3, 3, False, True),
+            ],
+            6: [
+                # SGSITS EE III-year Sem B: EE32510, EE32603
+                ("Hybrid Energy Systems", 3, 3, False, False),
+                ("Hybrid Energy Systems Lab", 1, 2, True, False),
+                ("Power System Planning", 3, 3, False, True),
+                ("Open Elective - II", 3, 3, False, True),
+                ("Minor Project - II", 2, 4, True, False),
+            ],
+        },
+        4: {
+            7: [
+                ("Switchgear and Protection Lab", 1, 2, True, False),
+                ("Open Elective - III", 3, 3, False, True),
+                ("Evaluation of Internship - II", 2, 0, False, False),
+                ("Major Project - Phase I", 3, 6, True, False),
+            ],
+            8: [
+                ("Department Elective - II", 3, 3, False, True),
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "ME": {
+        3: {
+            5: [
+                ("Open Elective - I", 3, 3, False, True),
+            ],
+        },
+        4: {
+            8: [
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "ECE": {
+        2: {
+            3: [
+                ("Electronic Measurement & Instrumentation", 3, 3, False, False),
+                ("Data Structures using C++", 3, 3, False, False),
+                ("Network Analysis Lab", 1, 2, True, False),
+            ],
+            4: [
+                ("Analog Circuits", 3, 3, False, False),
+                ("Analog Circuits Lab", 1, 2, True, False),
+                ("Computer Organization & Architecture", 3, 3, False, False),
+                ("Values, Humanities and Professional Ethics", 2, 2, False, False),
+            ],
+        },
+        3: {
+            5: [
+                ("Digital System Design using HDL", 3, 3, False, False),
+                ("Department Elective - I", 3, 3, False, True),
+                ("Open Elective - I", 3, 3, False, True),
+                ("Minor Project - I", 2, 4, True, False),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+            ],
+            6: [
+                ("Digital Signal Processing Lab", 1, 2, True, False),
+                ("Department Elective - II", 3, 3, False, True),
+                ("Open Elective - II", 3, 3, False, True),
+                ("Minor Project - II", 2, 4, True, False),
+            ],
+        },
+        4: {
+            7: [
+                ("Optical & Wireless Communication Lab", 1, 2, True, False),
+                ("Department Elective - III", 3, 3, False, True),
+                ("Evaluation of Internship - II", 2, 0, False, False),
+                ("Major Project - Phase I", 3, 6, True, False),
+            ],
+            8: [
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "IT": {
+        2: {
+            3: [
+                ("Principles of Programming Languages", 3, 3, False, False),
+                ("Data Communication", 3, 3, False, False),
+            ],
+            4: [
+                ("Mathematics - IV (Probability & Statistics)", 4, 4, False, False),
+                ("Microprocessors & Interfacing", 3, 3, False, False),
+                ("Values, Humanities and Professional Ethics", 2, 2, False, False),
+                ("Software Engineering Lab", 1, 2, True, False),
+            ],
+        },
+        3: {
+            5: [
+                ("Operating Systems Lab", 1, 2, True, False),
+                ("Artificial Intelligence", 3, 3, False, False),
+                ("Department Elective - I", 3, 3, False, True),
+                ("Open Elective - I", 3, 3, False, True),
+                ("Minor Project - I", 2, 4, True, False),
+            ],
+            6: [
+                ("Department Elective - II", 3, 3, False, True),
+                ("Open Elective - II", 3, 3, False, True),
+                ("Minor Project - II", 2, 4, True, False),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+            ],
+        },
+        4: {
+            7: [
+                ("Cloud & IoT Lab", 1, 2, True, False),
+                ("Department Elective - III", 3, 3, False, True),
+                ("Evaluation of Internship - II", 2, 0, False, False),
+                ("Major Project - Phase I", 3, 6, True, False),
+            ],
+            8: [
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "CE": {
+        2: {
+            3: [
+                ("Mathematics - III", 4, 4, False, False),
+                ("Engineering Geology", 3, 3, False, False),
+            ],
+            4: [
+                ("Geotechnical Engineering", 3, 3, False, False),
+                ("Hydraulics & Hydraulic Machines", 3, 3, False, False),
+                ("Hydraulics Lab", 1, 2, True, False),
+                ("Values, Humanities and Professional Ethics", 2, 2, False, False),
+            ],
+        },
+        3: {
+            5: [
+                ("Design of Steel Structures", 3, 3, False, False),
+                ("Foundation Engineering", 3, 3, False, False),
+                ("Open Elective - I", 3, 3, False, True),
+                ("Minor Project - I", 2, 4, True, False),
+            ],
+            6: [
+                ("Department Elective - I", 3, 3, False, True),
+                ("Open Elective - II", 3, 3, False, True),
+                ("Minor Project - II", 2, 4, True, False),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+            ],
+        },
+        4: {
+            7: [
+                ("Hydrology & Irrigation Engineering", 3, 3, False, False),
+                ("Department Elective - II", 3, 3, False, True),
+                ("Department Elective - III", 3, 3, False, True),
+                ("Open Elective - III", 3, 3, False, True),
+                ("Evaluation of Internship - II", 2, 0, False, False),
+                ("Major Project - Phase I", 3, 6, True, False),
+            ],
+            8: [
+                ("Construction Planning & Management", 3, 3, False, False),
+                ("Department Elective - IV", 3, 3, False, True),
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "EI": {
+        2: {
+            3: [
+                # SGSITS EI II-year Sem A: EI27002, EI27881
+                ("Fundamentals of Measurement", 3, 3, False, False),
+                ("Fundamentals of Measurement Lab", 1, 2, True, False),
+                ("Network Analysis Lab", 1, 2, True, False),
+                ("Values, Humanities and Professional Ethics", 2, 2, False, False),
+            ],
+            4: [
+                # SGSITS EI II-year Sem B: EI27504, EI27551, EI27992
+                ("Circuit Design using HDL", 3, 3, False, False),
+                ("Circuit Design using HDL Lab", 1, 2, True, False),
+                ("Sensors & Transducers Lab", 1, 2, True, False),
+                ("Software Workshop Lab", 1, 2, True, False),
+                ("Mathematics - III", 4, 4, False, False),
+            ],
+        },
+        3: {
+            5: [
+                # SGSITS EI III-year Sem A: IT37005, EC37014, EI37252 /
+                # CO37253 (electives), EI37481, EI37482
+                ("Data Structures", 3, 3, False, False),
+                ("Data Structures Lab", 1, 2, True, False),
+                ("Analog and Digital Communication", 3, 3, False, False),
+                ("Department Elective - I (Instrument System Design / Artificial Intelligence)", 3, 3, False, True),
+                ("Test & Calibration Lab", 1, 2, True, False),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+            ],
+            6: [
+                # SGSITS EI III-year Sem B: EI37511, EI37512, ME37502, EI37991
+                ("Filter Design and Simulation", 3, 3, False, False),
+                ("Filter Design and Simulation Lab", 1, 2, True, False),
+                ("Digital Signal Processing", 3, 3, False, False),
+                ("Mechanical Measurement", 3, 3, False, False),
+                ("Mini Project", 2, 4, True, False),
+            ],
+        },
+        4: {
+            7: [
+                # SGSITS EI IV-year Sem A: EI47053, EE47002
+                ("Process Instrumentation", 3, 3, False, False),
+                ("Power Electronics", 3, 3, False, False),
+                ("Industrial Automation & PLC", 3, 3, False, False),
+                ("Program Elective - III", 3, 3, False, True),
+                ("Evaluation of Internship - II", 2, 0, False, False),
+                ("Major Project - Phase I", 3, 6, True, False),
+            ],
+            8: [
+                ("Program Elective - IV", 3, 3, False, True),
+                ("Open Elective", 3, 3, False, True),
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "BME": {
+        2: {
+            3: [
+                ("Mathematics - III", 4, 4, False, False),
+                ("Network Analysis", 3, 3, False, False),
+                ("Anatomy & Physiology Lab", 1, 2, True, False),
+            ],
+            4: [
+                ("Analog & Digital Circuits", 3, 3, False, False),
+                ("Analog & Digital Circuits Lab", 1, 2, True, False),
+                ("Signals & Systems", 4, 4, False, False),
+                ("Values, Humanities and Professional Ethics", 2, 2, False, False),
+            ],
+        },
+        3: {
+            5: [
+                ("Biomedical Instrumentation - II", 3, 3, False, False),
+                ("Microprocessors & Microcontrollers", 3, 3, False, False),
+                ("Microprocessors Lab", 1, 2, True, False),
+                ("Open Elective - I", 3, 3, False, True),
+                ("Minor Project - I", 2, 4, True, False),
+            ],
+            6: [
+                ("Department Elective - I", 3, 3, False, True),
+                ("Open Elective - II", 3, 3, False, True),
+                ("Biomedical Signal Processing Lab", 1, 2, True, False),
+                ("Minor Project - II", 2, 4, True, False),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+            ],
+        },
+        4: {
+            7: [
+                ("Artificial Organs & Implants", 3, 3, False, False),
+                ("Telemedicine & Health Informatics", 3, 3, False, False),
+                ("Department Elective - II", 3, 3, False, True),
+                ("Department Elective - III", 3, 3, False, True),
+                ("Evaluation of Internship - II", 2, 0, False, False),
+                ("Major Project - Phase I", 3, 6, True, False),
+            ],
+            8: [
+                ("Department Elective - IV", 3, 3, False, True),
+                ("Open Elective - III", 3, 3, False, True),
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "CHE": {
+        2: {
+            3: [
+                ("Mathematics - III", 4, 4, False, False),
+                ("Chemical Engineering Thermodynamics - I", 3, 3, False, False),
+            ],
+            4: [
+                ("Chemical Engineering Thermodynamics - II", 3, 3, False, False),
+                ("Numerical Methods in Chemical Engineering", 3, 3, False, False),
+                ("Mechanical Operations Lab", 1, 2, True, False),
+                ("Values, Humanities and Professional Ethics", 2, 2, False, False),
+            ],
+        },
+        3: {
+            5: [
+                ("Process Dynamics & Control", 3, 3, False, False),
+                ("Process Control Lab", 1, 2, True, False),
+                ("Department Elective - I", 3, 3, False, True),
+                ("Open Elective - I", 3, 3, False, True),
+                ("Minor Project - I", 2, 4, True, False),
+            ],
+            6: [
+                ("Transport Phenomena", 3, 3, False, False),
+                ("Department Elective - II", 3, 3, False, True),
+                ("Open Elective - II", 3, 3, False, True),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+            ],
+        },
+        4: {
+            7: [
+                ("Process Equipment Design & Drawing", 3, 3, False, False),
+                ("Petroleum Refining & Petrochemicals", 3, 3, False, False),
+                ("Safety & Hazard Analysis", 3, 3, False, False),
+                ("Department Elective - III", 3, 3, False, True),
+                ("Evaluation of Internship - II", 2, 0, False, False),
+                ("Major Project - Phase I", 3, 6, True, False),
+            ],
+            8: [
+                ("Department Elective - IV", 3, 3, False, True),
+                ("Open Elective - III", 3, 3, False, True),
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+    "IPE": {
+        2: {
+            3: [
+                ("Mathematics - III", 4, 4, False, False),
+                ("Strength of Materials", 3, 3, False, False),
+                ("Strength of Materials Lab", 1, 2, True, False),
+            ],
+            4: [
+                ("Kinematics & Dynamics of Machines", 3, 3, False, False),
+                ("Fluid Mechanics & Machines", 3, 3, False, False),
+                ("Metrology & Measurement", 3, 3, False, False),
+                ("Metrology & Measurement Lab", 1, 2, True, False),
+                ("Values, Humanities and Professional Ethics", 2, 2, False, False),
+            ],
+        },
+        3: {
+            5: [
+                ("Machine Design", 3, 3, False, False),
+                ("Machine Tool Technology", 3, 3, False, False),
+                ("Machine Tool Lab", 1, 2, True, False),
+                ("Open Elective - I", 3, 3, False, True),
+                ("Minor Project - I", 2, 4, True, False),
+            ],
+            6: [
+                ("Department Elective - I", 3, 3, False, True),
+                ("Open Elective - II", 3, 3, False, True),
+                ("Product Design & Development", 3, 3, False, False),
+                ("Evaluation of Internship - I", 2, 0, False, False),
+            ],
+        },
+        4: {
+            7: [
+                ("Project Management", 3, 3, False, False),
+                ("Lean & Six Sigma Manufacturing", 3, 3, False, False),
+                ("Department Elective - II", 3, 3, False, True),
+                ("Department Elective - III", 3, 3, False, True),
+                ("Advanced Manufacturing Lab", 1, 2, True, False),
+                ("Evaluation of Internship - II", 2, 0, False, False),
+                ("Major Project - Phase I", 3, 6, True, False),
+            ],
+            8: [
+                ("Major Project - Phase II", 8, 12, True, False),
+                ("Department Elective - IV", 3, 3, False, True),
+                ("Open Elective - III", 3, 3, False, True),
+                ("Comprehensive Viva", 2, 0, False, False),
+            ],
+        },
+    },
+}
+
+
+def _semester_subjects(b: str):
+    """{(year, semester): [subject tuples]} for one branch, in code order:
+    the base subjects, then the common year-2 electives (sem 3 only), then
+    CURRICULUM_ADDITIONS - that order is what keeps existing codes stable."""
+    out = {}
+    for sem, subjects in COMMON_YEAR1.items():
+        out[(1, sem)] = list(subjects)
+    branch_data = BRANCH_CURRICULUM.get(b, {})
+    year2_names = {s[0].strip().lower() for sem_subjects in branch_data.get(2, {}).values() for s in sem_subjects}
+    for y, semesters in branch_data.items():
+        for sem, subjects in semesters.items():
+            effective_subjects = list(subjects)
+            if y == 2 and sem == 3:
+                for extra in COMMON_YEAR2_ELECTIVES:
+                    if extra[0].strip().lower() not in year2_names:
+                        effective_subjects.append(extra)
+            out[(y, sem)] = effective_subjects
+    for source in (CURRICULUM_ADDITIONS["*"], CURRICULUM_ADDITIONS.get(b, {})):
+        for y, semesters in source.items():
+            for sem, subjects in semesters.items():
+                out.setdefault((y, sem), []).extend(subjects)
+    return dict(sorted(out.items()))
 
 
 def build_subject_rows(branch: str = None, year: int = None):
@@ -615,26 +1083,10 @@ def build_subject_rows(branch: str = None, year: int = None):
     rows = []
     branches = [branch] if branch else BRANCHES
     for b in branches:
-        if year is None or year == 1:
-            for sem, subjects in COMMON_YEAR1.items():
-                for seq, (name, credits, hours, is_lab, is_elective) in enumerate(subjects, start=1):
-                    code = f"{b}-S{sem}-{seq:02d}"
-                    rows.append((code, name, b, 1, sem, credits, hours, is_lab, is_elective))
-        branch_data = BRANCH_CURRICULUM.get(b, {})
-        for y, semesters in branch_data.items():
+        for (y, sem), subjects in _semester_subjects(b).items():
             if year is not None and year != y:
                 continue
-            year2_names = set()
-            if y == 2:
-                for sem_subjects in semesters.values():
-                    year2_names.update(s[0].strip().lower() for s in sem_subjects)
-            for sem, subjects in semesters.items():
-                effective_subjects = list(subjects)
-                if y == 2 and sem == 3:
-                    for extra in COMMON_YEAR2_ELECTIVES:
-                        if extra[0].strip().lower() not in year2_names:
-                            effective_subjects.append(extra)
-                for seq, (name, credits, hours, is_lab, is_elective) in enumerate(effective_subjects, start=1):
-                    code = f"{b}-S{sem}-{seq:02d}"
-                    rows.append((code, name, b, y, sem, credits, hours, is_lab, is_elective))
+            for seq, (name, credits, hours, is_lab, is_elective) in enumerate(subjects, start=1):
+                code = f"{b}-S{sem}-{seq:02d}"
+                rows.append((code, name, b, y, sem, credits, hours, is_lab, is_elective))
     return rows

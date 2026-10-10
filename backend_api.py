@@ -12,9 +12,11 @@ import hashlib
 from datetime import datetime, timedelta
 import jwt
 import uvicorn
+import copy
 import json
 import random
-from curriculum_data import build_subject_rows
+from curriculum_data import build_subject_rows, BRANCHES as CURRICULUM_BRANCHES
+import credit_system
 from teachers_data import build_teacher_rows
 from test_teachers_data import build_test_teacher_rows
 
@@ -44,13 +46,48 @@ LAB_SESSION_SLOTS = 2
 # a per-subject configurable value.
 MAX_THEORY_SESSIONS_PER_WEEK = 3
 
-# Recommended cap on a group's TOTAL weekly lab sessions across all its lab
-# courses combined (checked as a warning in assign_subject). Only one lab is
-# scheduled per day (generate_timetable), and each lab course needs
-# LAB_SESSIONS_PER_WEEK (3) distinct days - so 2 lab courses already need 6
-# lab-days out of a 5-day week. Keeping the total to 3-4 sessions/week (i.e.
-# effectively one lab course per group) is what actually fits.
+# Credit weighting: a theory subject worth more credits than the section's
+# lowest-credit theory subject gets one extra period/week per extra credit, up
+# to this many, on top of the cap above (so a subject 1 credit above gets 4
+# periods, 2 or more above gets 5). Extras only use periods the section has
+# free - see credit_bonus_sessions.
+MAX_CREDIT_BONUS_SESSIONS = 2
+
+# How many weekdays a section's labs normally spread over (generate_timetable),
+# which keeps one weekday lab-free. A day holds 2 lab blocks, so this already
+# fits 2 lab courses (6 sessions); a section with more labs than fit in these
+# days automatically gets all 5 weekdays instead of losing sessions.
 MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK = 4
+
+def credit_bonus_sessions(theory_assignments: list, free_slots: int) -> list:
+    """Extra periods/week for each theory assignment, by credits (see
+    MAX_CREDIT_BONUS_SESSIONS). free_slots is how many periods the section
+    still has after its labs and base theory periods; when that is fewer than
+    the extras wanted, they are handed out one per subject per round, highest
+    credits first (then the subject's own hours_per_week), so the heaviest
+    subjects are served first and nobody gets a 2nd extra before the others
+    got their 1st. Non-credit (audit) subjects never count as the lowest, and
+    a subject with no weekly hours of its own (seminar, training) stays off
+    the timetable whatever its credits."""
+    credits = [(a.get("course_credits") or 0) if (a.get("hours_per_week") or 0) > 0 else 0
+               for a in theory_assignments]
+    extras = [0] * len(theory_assignments)
+    credit_bearing = [c for c in credits if c > 0]
+    if not credit_bearing:
+        return extras
+    lowest = min(credit_bearing)
+    wanted = [max(0, min(MAX_CREDIT_BONUS_SESSIONS, c - lowest)) for c in credits]
+    order = sorted(range(len(credits)),
+                   key=lambda i: (-credits[i], -(theory_assignments[i].get("hours_per_week") or 0), i))
+    for _ in range(MAX_CREDIT_BONUS_SESSIONS):
+        for i in order:
+            if free_slots <= 0:
+                return extras
+            if extras[i] < wanted[i]:
+                extras[i] += 1
+                free_slots -= 1
+    return extras
+
 
 # ============================================================
 # MIGRATIONS
@@ -68,6 +105,8 @@ MIGRATIONS = [
     ("subjects",           "branch",              "TEXT"),
     ("subjects",           "year",                "INTEGER DEFAULT 1"),
     ("subjects",           "is_elective",         "BOOLEAN DEFAULT 0"),
+    ("subjects",           "ltp",                 "TEXT"),
+    ("subjects",           "credit_source",       "TEXT DEFAULT 'curriculum'"),
 
     ("teachers",           "designation",         "TEXT"),
     ("teachers",           "specialization",      "TEXT"),
@@ -199,6 +238,27 @@ def sync_rooms(conn):
         ("LT 302", "LT 302", 80, "lecture", "LT", 3, 1, 1, 1, 0, 0),
         ("LT 401", "LT 401", 80, "lecture", "LT", 4, 1, 1, 1, 0, 0),
         ("LT 402", "LT 402", 80, "lecture", "LT", 4, 1, 1, 1, 0, 0),
+        # 17 more lecture rooms -> 40 theory rooms in all (plus 33 labs = 73
+        # rooms), enough for every branch-year-section to keep its own home
+        # classroom. Generic numbering continuing the ATC/LT pattern above -
+        # rename to the real room numbers if they differ.
+        ("ATC 308", "ATC 308", 60, "lecture", "ATC", 3, 1, 1, 1, 0, 0),
+        ("ATC 401", "ATC 401", 60, "lecture", "ATC", 4, 1, 1, 1, 0, 0),
+        ("ATC 402", "ATC 402", 60, "lecture", "ATC", 4, 1, 1, 1, 0, 0),
+        ("ATC 403", "ATC 403", 60, "lecture", "ATC", 4, 1, 1, 1, 0, 0),
+        ("ATC 404", "ATC 404", 60, "lecture", "ATC", 4, 1, 1, 1, 0, 0),
+        ("ATC 405", "ATC 405", 60, "lecture", "ATC", 4, 1, 1, 1, 0, 0),
+        ("ATC 406", "ATC 406", 60, "lecture", "ATC", 4, 1, 1, 1, 0, 0),
+        ("ATC 407", "ATC 407", 60, "lecture", "ATC", 4, 1, 1, 1, 0, 0),
+        ("ATC 408", "ATC 408", 60, "lecture", "ATC", 4, 1, 1, 1, 0, 0),
+        ("ATC 501", "ATC 501", 60, "lecture", "ATC", 5, 1, 1, 1, 0, 0),
+        ("ATC 502", "ATC 502", 60, "lecture", "ATC", 5, 1, 1, 1, 0, 0),
+        ("ATC 503", "ATC 503", 60, "lecture", "ATC", 5, 1, 1, 1, 0, 0),
+        ("ATC 504", "ATC 504", 60, "lecture", "ATC", 5, 1, 1, 1, 0, 0),
+        ("ATC 505", "ATC 505", 60, "lecture", "ATC", 5, 1, 1, 1, 0, 0),
+        ("ATC 506", "ATC 506", 60, "lecture", "ATC", 5, 1, 1, 1, 0, 0),
+        ("LT 501", "LT 501", 80, "lecture", "LT", 5, 1, 1, 1, 0, 0),
+        ("LT 502", "LT 502", 80, "lecture", "LT", 5, 1, 1, 1, 0, 0),
         ("LB01", "Lab 01", 40, "lab", "Lab Block", 1, 1, 0, 0, 1, 1),
         ("LB02", "Lab 02", 40, "lab", "Lab Block", 1, 1, 0, 0, 1, 1),
         ("LB03", "Lab 03", 40, "lab", "Lab Block", 1, 1, 0, 0, 1, 1),
@@ -207,6 +267,18 @@ def sync_rooms(conn):
             "INSERT OR IGNORE INTO rooms (room_code,room_name,capacity,room_type,building,floor,has_projector,has_whiteboard,has_ac,has_computers,is_lab,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,1)",
             (code, name, cap, rtype, building, floor, proj, board, ac, comp, is_lab))
 
+    # Department labs: with only the 3 common Lab Block rooms, every section
+    # in the institute competed for the same 3 rooms and later sections were
+    # left with half their lab sessions unplaced. Each department gets its own
+    # 3 labs (building = branch code, which generate_timetable uses to prefer a
+    # section's own department labs). Generic names - SGSITS's real lab room
+    # numbers weren't available; rename/add/deactivate them as needed.
+    for branch in CURRICULUM_BRANCHES:
+        for n in (1, 2, 3):
+            cursor.execute(
+                "INSERT OR IGNORE INTO rooms (room_code,room_name,capacity,room_type,building,floor,has_projector,has_whiteboard,has_ac,has_computers,is_lab,is_active) VALUES (?,?,?,?,?,?,?,?,?,?,?,1)",
+                (f"{branch} LAB-{n}", f"{branch} Department Lab {n}", 30, "lab", branch, 1, 1, 1, 0, 1, 1))
+
     # Retire the old default room set (superseded by ATC/LT/LB above) without
     # deleting the rows outright, so historical timetable_entries referencing
     # them by room_id don't dangle.
@@ -214,6 +286,41 @@ def sync_rooms(conn):
         "UPDATE rooms SET is_active=0 WHERE room_code IN ('R101','R102','R201','LAB1','LAB2','LAB3','AUD1')"
     )
     conn.commit()
+
+
+DEFAULT_SECTIONED_BRANCHES = ("CSE", "IT")  # matches the old hard-coded frontend rule
+
+
+def sync_class_config(conn):
+    """
+    Makes sure every branch x year has a class_config row. New rows default
+    to the old behaviour (only CSE and IT divided into sections). Any class
+    that already has a section other than "A" in student_groups is marked as
+    sectioned, so existing data is never hidden. Runs on every startup.
+    """
+    cursor = conn.cursor()
+    for branch in CURRICULUM_BRANCHES:
+        for year in (1, 2, 3, 4):
+            cursor.execute("INSERT OR IGNORE INTO class_config (branch, year, has_sections) VALUES (?,?,?)",
+                           (branch, year, 1 if branch in DEFAULT_SECTIONED_BRANCHES else 0))
+            sections = [s for s in class_sections(conn, branch, year) if s["section"] != "A"]
+            if sections:
+                cursor.execute("UPDATE class_config SET has_sections=1 WHERE branch=? AND year=?", (branch, year))
+    conn.commit()
+
+
+def class_sections(conn, branch: str, year: int):
+    """Every section (student_group) of one class, A first."""
+    prefix = f"{branch}{year}"
+    rows = conn.execute('''
+        SELECT sg.id, sg.group_code, sg.student_count, sg.room_id, r.room_code
+        FROM student_groups sg LEFT JOIN rooms r ON r.id = sg.room_id
+        WHERE sg.department=? AND sg.group_code LIKE ? AND sg.is_active=1
+        ORDER BY sg.group_code
+    ''', (branch, prefix + "%")).fetchall()
+    return [{"id": r["id"], "group_code": r["group_code"], "section": r["group_code"][len(prefix):],
+             "student_count": r["student_count"], "home_room": r["room_code"], "room_id": r["room_id"]}
+            for r in rows if r["group_code"][len(prefix):].isalpha()]
 
 
 def dedupe_course_assignments(conn):
@@ -258,6 +365,34 @@ def backfill_subject_electives(conn):
     conn.commit()
     if updated:
         print(f"✅ Backfilled is_elective on {updated} existing subject(s)")
+
+
+def backfill_subject_credits(conn):
+    """
+    The SGSITS credit system (credit_system.py) corrected many curriculum
+    credit values (e.g. audit courses -> 0, L3-T1 cores -> 4). Subjects
+    already loaded from curriculum_data.py keep their old credits, so this
+    re-syncs credits on every row whose code AND name still match the
+    curriculum - a row an admin renamed/re-purposed under a curriculum code
+    is left alone, and so is any row whose credits an admin set by hand
+    (credit_source 'manual' / 'preset'). Runs on every startup; a no-op once
+    caught up.
+    """
+    cursor = conn.cursor()
+    updated = 0
+    for code, name, _b, _y, _sem, credits, _hours, _is_lab, _is_elective in build_subject_rows():
+        cursor.execute(
+            "UPDATE subjects SET credits=? WHERE code=? AND lower(trim(name))=? AND credits!=? "
+            "AND COALESCE(credit_source, 'curriculum')='curriculum'",
+            (credits, code, name.strip().lower(), credits))
+        updated += cursor.rowcount
+        cursor.execute(
+            "UPDATE courses SET credits=? WHERE course_code=? AND lower(trim(course_name))=? AND credits!=? "
+            "AND course_code IN (SELECT code FROM subjects WHERE COALESCE(credit_source, 'curriculum')='curriculum')",
+            (credits, code, name.strip().lower(), credits))
+    conn.commit()
+    if updated:
+        print(f"✅ Backfilled credits on {updated} existing subject(s) to the SGSITS credit system")
 
 
 def dedupe_subjects_by_name(conn):
@@ -431,9 +566,29 @@ def init_db():
         is_lab BOOLEAN DEFAULT 0,
         teacher_id INTEGER,
         teacher2_id INTEGER,
+        ltp TEXT,
+        credit_source TEXT DEFAULT 'curriculum',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (teacher_id) REFERENCES teachers(id),
         FOREIGN KEY (teacher2_id) REFERENCES teachers(id)
+    )''')
+
+    # Whether a class (branch + year) is taught as one whole class or divided
+    # into sections A, B, C... A class without sections is stored as a single
+    # student_group with section "A", so everything downstream (assignments,
+    # generation, views) works the same either way.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS class_config (
+        branch TEXT NOT NULL,
+        year INTEGER NOT NULL,
+        has_sections INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (branch, year)
+    )''')
+
+    # Credit limits (see credit_system.DEFAULT_POLICY) - one row per limit,
+    # editable by admins; missing keys fall back to the defaults.
+    cursor.execute('''CREATE TABLE IF NOT EXISTS credit_policy (
+        key TEXT PRIMARY KEY,
+        value INTEGER NOT NULL
     )''')
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS courses (
@@ -563,8 +718,10 @@ def init_db():
     conn.commit()
     run_migrations(conn)
     sync_rooms(conn)
+    sync_class_config(conn)
     dedupe_course_assignments(conn)
     backfill_subject_electives(conn)
+    backfill_subject_credits(conn)
     dedupe_subjects_by_name(conn)
 
     _insert_sample_data(cursor)
@@ -917,6 +1074,9 @@ class SubjectData(BaseModel):
     is_elective: Optional[bool] = False
     teacher_id: Optional[int] = None
     teacher2_id: Optional[int] = None
+    ltp: Optional[str] = None
+    # Save even if it breaks a credit limit (the admin confirmed the warning).
+    force: Optional[bool] = False
 
 class CourseData(BaseModel):
     course_code: str
@@ -984,7 +1144,12 @@ def _build_timetable_response(branch, year, section, semester, entries_list, sav
         if room:
             cell += f"<br>Room {room}"
         if day and slot_key and day in matrix and slot_key in matrix[day] and slot_key != LUNCH_SLOT:
-            matrix[day][slot_key] = cell
+            # Parallel batch labs put two entries in one period (E1 in one
+            # lab, E2 in another) - show both instead of overwriting.
+            if matrix[day][slot_key] != "—":
+                matrix[day][slot_key] += "<br>" + cell
+            else:
+                matrix[day][slot_key] = cell
     return {"branch": branch, "year": year, "semester": semester, "section": section,
             "days": DAYS, "time_slots": TIME_SLOTS, "timetable": matrix}
 
@@ -1410,18 +1575,29 @@ async def add_subject(subject: SubjectData, _=Depends(require_admin)):
         cursor.execute("SELECT id FROM subjects WHERE code=?", (subject.code,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail=f"Subject code {subject.code} already exists")
+        ltp = subject.ltp or None
+        if ltp:
+            try:
+                subject.credits = credit_system.credits_from_ltp(ltp)
+                ltp = "-".join(str(x) for x in credit_system.parse_ltp(ltp))
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+        credits = subject.credits or 0
+        raise_if_violations(
+            credit_violations(conn, subject.branch, subject_credits=credits, extra=(subject.semester, credits)),
+            bool(subject.force))
         cursor.execute(
-            "INSERT INTO subjects (code,name,branch,year,semester,credits,hours_per_week,is_lab,is_elective,teacher_id,teacher2_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO subjects (code,name,branch,year,semester,credits,hours_per_week,is_lab,is_elective,teacher_id,teacher2_id,ltp,credit_source) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'manual')",
             (subject.code, subject.name, subject.branch, subject.year, subject.semester,
-             subject.credits, subject.hours_per_week, subject.is_lab, subject.is_elective,
-             subject.teacher_id, subject.teacher2_id))
+             credits, subject.hours_per_week, subject.is_lab, subject.is_elective,
+             subject.teacher_id, subject.teacher2_id, ltp))
         subject_id = cursor.lastrowid
 
         cursor.execute("SELECT id FROM courses WHERE course_code=?", (subject.code,))
         if not cursor.fetchone():
             cursor.execute(
                 "INSERT INTO courses (course_code,course_name,credits,hours_per_week,is_lab,is_elective,department,semester) VALUES (?,?,?,?,?,?,?,?)",
-                (subject.code, subject.name, subject.credits, subject.hours_per_week,
+                (subject.code, subject.name, credits, subject.hours_per_week,
                  subject.is_lab, subject.is_elective, subject.branch, subject.semester))
 
         conn.commit()
@@ -1537,19 +1713,20 @@ async def assign_subject(data: dict, _=Depends(require_admin)):
                 f"teaching slots exist per week. Some subjects may not fit when you generate the timetable."
             )
 
-        # Separate check: only one lab is scheduled per day, so a group with
-        # too many lab courses will run out of distinct days before every
-        # lab gets its full LAB_SESSIONS_PER_WEEK sessions.
+        # Separate check: a day holds at most 2 two-hour lab blocks (morning +
+        # afternoon), so a section's lab sessions can't exceed 2 x weekdays.
+        # Any mix inside that works - 6 subjects + 1 lab, 5 + 2, 4 + 2, 4 + 3.
         lab_course_count = sum(1 for r in course_rows if r["is_lab"])
+        theory_count = subject_count - lab_course_count
         total_lab_sessions_needed = lab_course_count * LAB_SESSIONS_PER_WEEK
+        max_lab_sessions = 2 * len(DAYS)
         lab_warning = None
-        if total_lab_sessions_needed > MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK:
+        if total_lab_sessions_needed > max_lab_sessions:
             lab_warning = (
                 f"{branch} Year {year} Sem {subject['semester']} now has {lab_course_count} lab course(s), "
-                f"needing {total_lab_sessions_needed} lab sessions/week total ({LAB_SESSIONS_PER_WEEK} each). "
-                f"Only one lab is scheduled per day, so at most {len(DAYS)} can fit in the week - keeping it "
-                f"to {MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK} or fewer ensures every lab gets its full "
-                f"{LAB_SESSIONS_PER_WEEK} sessions."
+                f"needing {total_lab_sessions_needed} two-hour lab sessions/week ({LAB_SESSIONS_PER_WEEK} each), "
+                f"but a week fits at most {max_lab_sessions} (2 per day). Keep it to "
+                f"{max_lab_sessions // LAB_SESSIONS_PER_WEEK} labs or fewer per section."
             )
 
         return {
@@ -1557,6 +1734,8 @@ async def assign_subject(data: dict, _=Depends(require_admin)):
             "message": f"Subject assigned to section {section} successfully",
             "warning": warning,
             "lab_warning": lab_warning,
+            "layout": f"{theory_count} subject(s) + {lab_course_count} lab(s), "
+                      f"{total_hours_needed}/{total_available_slots} periods per week",
         }
     except HTTPException:
         raise
@@ -1630,6 +1809,314 @@ async def get_curriculum_catalog(branch: Optional[str] = None, year: Optional[in
             for r in rows
         ]
     }
+
+# ============================================================
+# CREDIT SYSTEM (SGSITS CBCS) - read-only, any logged-in user
+# ============================================================
+@app.get("/api/credits/overview")
+async def get_credit_overview(_=Depends(get_current_user)):
+    """Semester-by-semester credit totals for every branch, side by side."""
+    return {"branches": credit_system.branch_overview()}
+
+@app.get("/api/credits/scheme/{branch}")
+async def get_credit_scheme(branch: str, _=Depends(get_current_user)):
+    """Full 8-semester credit scheme (every subject + its credits) for one branch."""
+    branch = branch.upper()
+    if branch not in CURRICULUM_BRANCHES:
+        raise HTTPException(status_code=404, detail=f"Unknown branch '{branch}'")
+    return credit_system.credit_scheme(branch)
+
+@app.get("/api/credits/grading")
+async def get_grading_rules(_=Depends(get_current_user)):
+    return {
+        "grades": [{"grade": g, "min_marks": lo, "max_marks": hi, "grade_point": gp, "description": d}
+                   for g, lo, hi, gp, d in credit_system.GRADES],
+        "divisions": [{"min_cgpa": t, "division": label} for t, label in credit_system.DIVISIONS],
+        "min_cgpa_for_degree": credit_system.MIN_CGPA_FOR_DEGREE,
+        "assessment": credit_system.ASSESSMENT,
+        "marks_scheme": credit_system.MARKS_SCHEME,
+        "passing_rules": credit_system.PASSING_RULES,
+        "categories": credit_system.CATEGORY_LABELS,
+        "rules": credit_system.RULES,
+    }
+
+@app.post("/api/credits/calculate")
+async def calculate_gpa(data: dict, _=Depends(get_current_user)):
+    """
+    Body: {"semesters": [[{"credits": 4, "grade": "A"}, ...], ...]}
+    Returns each semester's SGPA plus the overall CGPA and division.
+    """
+    semesters = data.get("semesters") or []
+    try:
+        per_sem = []
+        for entries in semesters:
+            value, registered, earned = credit_system.sgpa(entries)
+            per_sem.append({"sgpa": value, "credits_registered": registered, "credits_earned": earned})
+        overall = credit_system.cgpa(semesters)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "semesters": per_sem,
+        "cgpa": overall,
+        "division": credit_system.division_for(overall),
+        "eligible_for_degree": overall >= credit_system.MIN_CGPA_FOR_DEGREE,
+    }
+
+
+# ------------------------------------------------------------
+# Credit management: live credits from the `subjects` table, editable by
+# admins, with SGSITS credit limits enforced on every change. Every write
+# re-totals the affected branch and refuses (409) anything that would push
+# a subject, semester, or the 4-year total past the policy - unless the
+# request says force=true (the admin saw the warning and confirmed).
+# ------------------------------------------------------------
+def get_credit_policy(conn) -> dict:
+    policy = dict(credit_system.DEFAULT_POLICY)
+    for r in conn.execute("SELECT key, value FROM credit_policy").fetchall():
+        if r["key"] in policy:
+            policy[r["key"]] = r["value"]
+    return policy
+
+
+def branch_semester_totals(conn, branch: str, overrides: Optional[Dict[int, int]] = None,
+                           extra: Optional[tuple] = None) -> Dict[int, int]:
+    """{semester: credits} for a branch from the live subjects table.
+    overrides: {subject_id: new_credits} applied before totalling.
+    extra: (semester, credits) for a subject about to be inserted."""
+    overrides = overrides or {}
+    totals: Dict[int, int] = {}
+    for r in conn.execute("SELECT id, semester, credits FROM subjects WHERE branch=?", (branch,)).fetchall():
+        credits = overrides.get(r["id"], r["credits"] or 0)
+        totals[r["semester"]] = totals.get(r["semester"], 0) + credits
+    if extra:
+        totals[extra[0]] = totals.get(extra[0], 0) + extra[1]
+    return totals
+
+
+def credit_violations(conn, branch: str, subject_credits: Optional[int] = None,
+                      overrides: Optional[Dict[int, int]] = None, extra: Optional[tuple] = None):
+    """Limit violations caused by a proposed change (overrides / extra as in
+    branch_semester_totals), judged only on the semesters it touches."""
+    policy = get_credit_policy(conn)
+    before = branch_semester_totals(conn, branch)
+    after = branch_semester_totals(conn, branch, overrides=overrides, extra=extra)
+    touched = {extra[0]} if extra else set()
+    if overrides:
+        marks = ",".join("?" * len(overrides))
+        touched |= {r["semester"] for r in conn.execute(
+            f"SELECT semester FROM subjects WHERE id IN ({marks})", list(overrides)).fetchall()}
+    return credit_system.check_policy(policy, after, subject_credits, semesters=touched,
+                                      previous=before)
+
+
+def raise_if_violations(violations, force: bool):
+    if violations and not force:
+        raise HTTPException(status_code=409, detail={
+            "message": "This change breaks the SGSITS credit limits. Send force=true to save anyway.",
+            "violations": violations,
+        })
+
+
+@app.get("/api/credits/policy")
+async def get_policy(_=Depends(get_current_user)):
+    conn = get_db()
+    try:
+        return {"policy": get_credit_policy(conn), "defaults": credit_system.DEFAULT_POLICY,
+                "labels": credit_system.POLICY_LABELS}
+    finally:
+        conn.close()
+
+
+@app.put("/api/admin/credits/policy")
+async def update_policy(data: dict, _=Depends(require_admin)):
+    """Body: any subset of the policy keys, e.g. {"semester_max_credits": 24}.
+    {"reset": true} restores every limit to the SGSITS defaults."""
+    conn = get_db()
+    try:
+        if data.get("reset"):
+            conn.execute("DELETE FROM credit_policy")
+        else:
+            new = get_credit_policy(conn)
+            for key, value in data.items():
+                if key not in credit_system.DEFAULT_POLICY:
+                    raise HTTPException(status_code=400, detail=f"Unknown limit '{key}'")
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=400, detail=f"'{key}' must be a whole number")
+                if value < 0:
+                    raise HTTPException(status_code=400, detail=f"'{key}' cannot be negative")
+                new[key] = value
+            if new["semester_min_credits"] > new["semester_max_credits"]:
+                raise HTTPException(status_code=400, detail="Min credits per semester cannot exceed the max")
+            if new["program_min_credits"] > new["program_max_credits"]:
+                raise HTTPException(status_code=400, detail="Min total credits cannot exceed the max")
+            for key, value in new.items():
+                conn.execute("INSERT INTO credit_policy (key, value) VALUES (?, ?) "
+                             "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+        conn.commit()
+        return {"success": True, "policy": get_credit_policy(conn)}
+    finally:
+        conn.close()
+
+
+@app.get("/api/credits/live/{branch}")
+async def get_live_credits(branch: str, _=Depends(get_current_user)):
+    """Credits as they are in the database right now (what admins edit),
+    grouped by semester, with each subject's SGSITS preset and the branch's
+    status against the credit limits."""
+    branch = branch.upper()
+    conn = get_db()
+    try:
+        policy = get_credit_policy(conn)
+        rows = conn.execute(
+            "SELECT id, code, name, year, semester, credits, hours_per_week, is_lab, is_elective, ltp, credit_source "
+            "FROM subjects WHERE branch=? ORDER BY semester, code", (branch,)).fetchall()
+        semesters: Dict[int, dict] = {}
+        for r in rows:
+            s = semesters.setdefault(r["semester"], {"semester": r["semester"], "year": r["year"], "subjects": [], "total_credits": 0})
+            credits = r["credits"] or 0
+            s["subjects"].append({
+                "id": r["id"], "code": r["code"], "name": r["name"], "credits": credits,
+                "hours_per_week": r["hours_per_week"], "is_lab": bool(r["is_lab"]),
+                "is_elective": bool(r["is_elective"]), "ltp": r["ltp"],
+                "credit_source": r["credit_source"] or "curriculum",
+                "category": credit_system.categorize(r["name"], r["year"], bool(r["is_lab"]), bool(r["is_elective"])),
+                "curriculum_default": credit_system.curriculum_default(r["code"], r["name"]),
+                "sgsits_preset": credit_system.sgsits_preset(r["name"], bool(r["is_lab"]), r["hours_per_week"]),
+            })
+            s["total_credits"] += credits
+        totals = {k: v["total_credits"] for k, v in semesters.items()}
+        return {
+            "branch": branch,
+            "policy": policy,
+            "status": credit_system.policy_status(policy, totals),
+            "semesters": [semesters[k] for k in sorted(semesters)],
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/credits/suggest")
+async def suggest_credits(name: str, is_lab: bool = False, hours_per_week: Optional[int] = None, _=Depends(get_current_user)):
+    """SGSITS preset credits for a subject name - used by Add Subject to pre-fill credits."""
+    return {"suggestion": credit_system.sgsits_preset(name, is_lab, hours_per_week)}
+
+
+def _set_subject_credits(conn, subject_id: int, credits: int, ltp: Optional[str], source: str, force: bool):
+    row = conn.execute("SELECT id, code, name, branch FROM subjects WHERE id=?", (subject_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Subject not found")
+    violations = credit_violations(conn, row["branch"], subject_credits=credits, overrides={subject_id: credits})
+    raise_if_violations(violations, force)
+    conn.execute("UPDATE subjects SET credits=?, ltp=?, credit_source=? WHERE id=?", (credits, ltp, source, subject_id))
+    conn.execute("UPDATE courses SET credits=? WHERE course_code=?", (credits, row["code"]))
+    conn.commit()
+    return {"success": True, "id": subject_id, "name": row["name"], "credits": credits, "ltp": ltp,
+            "credit_source": source, "warnings": violations}
+
+
+@app.put("/api/admin/subjects/{subject_id}/credits")
+async def assign_subject_credits(subject_id: int, data: dict, _=Depends(require_admin)):
+    """
+    Assign credits to one subject. Body: {"credits": 4} or {"ltp": "3-1-2"}
+    (credits then come from the SGSITS rule L + T + P/2), plus optional
+    "force": true to save past a credit limit.
+    """
+    ltp = data.get("ltp") or None
+    try:
+        if ltp:
+            credits = credit_system.credits_from_ltp(ltp)
+            ltp = "-".join(str(x) for x in credit_system.parse_ltp(ltp))
+        elif data.get("credits") is not None:
+            credits = int(data["credits"])
+        else:
+            raise HTTPException(status_code=400, detail="Send 'credits' or 'ltp'")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    conn = get_db()
+    try:
+        return _set_subject_credits(conn, subject_id, credits, ltp, "manual", bool(data.get("force")))
+    finally:
+        conn.close()
+
+
+@app.delete("/api/admin/subjects/{subject_id}/credits")
+async def remove_subject_credits(subject_id: int, _=Depends(require_admin)):
+    """Remove a subject's credits (sets them to 0 - it stays in the timetable
+    as a non-credit/audit course). Never breaks an upper limit, so no force."""
+    conn = get_db()
+    try:
+        return _set_subject_credits(conn, subject_id, 0, None, "manual", True)
+    finally:
+        conn.close()
+
+
+@app.post("/api/admin/subjects/{subject_id}/credits/reset")
+async def reset_subject_credits(subject_id: int, data: Optional[dict] = None, _=Depends(require_admin)):
+    """Put a subject back on its SGSITS default: the curriculum value if this
+    is a built-in curriculum subject, otherwise the SGSITS preset."""
+    data = data or {}
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT code, name, is_lab, hours_per_week FROM subjects WHERE id=?", (subject_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Subject not found")
+        default = credit_system.curriculum_default(row["code"], row["name"])
+        if default is not None:
+            return _set_subject_credits(conn, subject_id, default, None, "curriculum", bool(data.get("force")))
+        preset = credit_system.sgsits_preset(row["name"], bool(row["is_lab"]), row["hours_per_week"])
+        if not preset:
+            raise HTTPException(status_code=404, detail="No SGSITS default is known for this subject")
+        return _set_subject_credits(conn, subject_id, preset["credits"], preset["ltp"], "preset", bool(data.get("force")))
+    finally:
+        conn.close()
+
+
+@app.post("/api/admin/credits/apply-presets")
+async def apply_credit_presets(data: dict, _=Depends(require_admin)):
+    """
+    Pre-assign SGSITS preset credits to a branch's subjects in one go.
+    Body: {"branch": "IT", "semester": 5 (optional), "include_manual": false,
+           "dry_run": true, "force": false}
+    dry_run returns the proposed changes and resulting limit violations
+    without saving. Subjects an admin already edited by hand are skipped
+    unless include_manual is true.
+    """
+    branch = (data.get("branch") or "").upper()
+    if not branch:
+        raise HTTPException(status_code=400, detail="branch is required")
+    semester = data.get("semester")
+    conn = get_db()
+    try:
+        query = "SELECT id, code, name, semester, credits, is_lab, hours_per_week, ltp, credit_source FROM subjects WHERE branch=?"
+        params: list = [branch]
+        if semester:
+            query += " AND semester=?"
+            params.append(int(semester))
+        changes = []
+        for r in conn.execute(query, params).fetchall():
+            if (r["credit_source"] == "manual") and not data.get("include_manual"):
+                continue
+            preset = credit_system.sgsits_preset(r["name"], bool(r["is_lab"]), r["hours_per_week"])
+            # A change = different credits, or the same credits but no L-T-P
+            # recorded yet (curriculum subjects only ever stored credits).
+            if preset and (preset["credits"] != (r["credits"] or 0) or not r["ltp"]):
+                changes.append({"id": r["id"], "code": r["code"], "name": r["name"], "semester": r["semester"],
+                                "from": r["credits"] or 0, "to": preset["credits"], "ltp": preset["ltp"],
+                                "ltp_from": r["ltp"], "source": preset["source"]})
+        overrides = {c["id"]: c["to"] for c in changes}
+        violations = credit_violations(conn, branch, overrides=overrides)
+        if data.get("dry_run", True):
+            return {"dry_run": True, "changes": changes, "violations": violations}
+        raise_if_violations(violations, bool(data.get("force")))
+        for c in changes:
+            conn.execute("UPDATE subjects SET credits=?, ltp=?, credit_source='preset' WHERE id=?", (c["to"], c["ltp"], c["id"]))
+            conn.execute("UPDATE courses SET credits=? WHERE course_code=?", (c["to"], c["code"]))
+        conn.commit()
+        return {"dry_run": False, "applied": len(changes), "changes": changes, "violations": violations}
+    finally:
+        conn.close()
 
 @app.post("/api/admin/subjects/load-curriculum")
 async def load_curriculum(data: Optional[dict] = None, _=Depends(require_admin)):
@@ -1793,6 +2280,10 @@ async def create_section(data: dict, _=Depends(require_admin)):
         cursor.execute(
             "INSERT INTO student_groups (group_code,group_name,semester,department,academic_year,student_count,room_id,is_active) VALUES (?,?,?,?,?,?,?,1)",
             (group_code, f"{branch} {year_label} Section {section}", semester, branch, "2024-2025", student_count, room_id))
+        if section != "A":
+            # A second section means this class is now divided into sections.
+            cursor.execute("INSERT INTO class_config (branch, year, has_sections) VALUES (?,?,1) "
+                           "ON CONFLICT(branch, year) DO UPDATE SET has_sections=1", (branch, year))
         conn.commit()
 
         warning = None
@@ -1820,6 +2311,147 @@ async def create_section(data: dict, _=Depends(require_admin)):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
+
+# ------------------------------------------------------------
+# Classes with / without sections. A class = branch + year. "Without
+# sections" = one whole class (stored as the single section "A");
+# "with sections" = divided into A, B, C... each with its own subjects'
+# teachers, timetable and home classroom.
+# ------------------------------------------------------------
+def _class_info(conn, branch: str, year: int):
+    row = conn.execute("SELECT has_sections FROM class_config WHERE branch=? AND year=?", (branch, year)).fetchone()
+    has_sections = bool(row["has_sections"]) if row else branch in DEFAULT_SECTIONED_BRANCHES
+    return {"branch": branch, "year": year, "has_sections": has_sections,
+            "sections": class_sections(conn, branch, year)}
+
+
+def _ensure_section(conn, branch: str, year: int, section: str, student_count: int = 60, room_id=None):
+    group_code = f"{branch}{year}{section}"
+    if conn.execute("SELECT id FROM student_groups WHERE group_code=?", (group_code,)).fetchone():
+        return False
+    year_label = {1: "1st Year", 2: "2nd Year", 3: "3rd Year", 4: "4th Year"}.get(year, f"Year {year}")
+    conn.execute(
+        "INSERT INTO student_groups (group_code,group_name,semester,department,academic_year,student_count,room_id,is_active) VALUES (?,?,?,?,?,?,?,1)",
+        (group_code, f"{branch} {year_label} Section {section}", year * 2 - 1, branch, "2024-2025", student_count, room_id))
+    return True
+
+
+@app.get("/api/classes")
+async def list_classes(branch: Optional[str] = None, year: Optional[int] = None, _=Depends(get_current_user)):
+    """Every class (branch x year) with whether it has sections and which ones."""
+    conn = get_db()
+    try:
+        branches = [branch.upper()] if branch else list(CURRICULUM_BRANCHES)
+        years = [year] if year else [1, 2, 3, 4]
+        return {"classes": [_class_info(conn, b, y) for b in branches for y in years]}
+    finally:
+        conn.close()
+
+
+@app.put("/api/admin/classes")
+async def configure_class(data: dict, _=Depends(require_admin)):
+    """
+    Body: {"branch": "EE", "year": 2, "has_sections": true,
+           "sections": ["A", "B"] (optional), "student_count": 60 (optional)}
+    has_sections=false makes it one whole class - refused (409) while
+    sections other than A still exist, so nobody's assignments or timetable
+    silently disappear; remove those sections first. has_sections=true
+    creates any listed sections that don't exist yet (default A and B).
+    """
+    branch = (data.get("branch") or "").upper()
+    year = data.get("year")
+    if branch not in CURRICULUM_BRANCHES or not isinstance(year, int) or not 1 <= year <= 4:
+        raise HTTPException(status_code=422, detail="Valid branch and year (1-4) are required")
+    has_sections = bool(data.get("has_sections"))
+    student_count = int(data.get("student_count") or 60)
+    conn = get_db()
+    try:
+        existing = class_sections(conn, branch, year)
+        if not has_sections:
+            extra = [s["section"] for s in existing if s["section"] != "A"]
+            if extra:
+                raise HTTPException(status_code=409, detail=(
+                    f"{branch} year {year} still has section(s) {', '.join(extra)}. "
+                    f"Remove them before making it a single class."))
+            _ensure_section(conn, branch, year, "A", student_count)
+        else:
+            wanted = [str(s).strip().upper() for s in (data.get("sections") or []) if str(s).strip()]
+            if not wanted and len(existing) < 2:
+                wanted = ["A", "B"]
+            bad = [s for s in wanted if not s.isalpha() or len(s) > 2]
+            if bad:
+                raise HTTPException(status_code=422, detail=f"Section names must be letters, e.g. A, B, C (got {', '.join(bad)})")
+            for s in wanted:
+                _ensure_section(conn, branch, year, s, student_count)
+        conn.execute("INSERT INTO class_config (branch, year, has_sections) VALUES (?,?,?) "
+                     "ON CONFLICT(branch, year) DO UPDATE SET has_sections=excluded.has_sections",
+                     (branch, year, int(has_sections)))
+        conn.commit()
+        return {"success": True, **_class_info(conn, branch, year)}
+    finally:
+        conn.close()
+
+
+@app.put("/api/admin/sections/{branch}/{year}/{section}/room")
+async def set_section_room(branch: str, year: int, section: str, data: dict, _=Depends(require_admin)):
+    """
+    Set (or clear, with room_id null) the home classroom of one section - or
+    of a whole class, which is section "A". Creates the section if it doesn't
+    exist yet. Only lecture rooms are allowed (labs are picked per lab
+    session from the department's labs). Warns, without blocking, when the
+    room is already another section's home. Takes effect on the next
+    generation of that section's timetable.
+    """
+    branch, section = branch.upper(), section.upper()
+    room_id = data.get("room_id")
+    conn = get_db()
+    try:
+        room_code = None
+        if room_id is not None:
+            room = conn.execute("SELECT room_code, is_lab FROM rooms WHERE id=? AND is_active=1", (room_id,)).fetchone()
+            if not room:
+                raise HTTPException(status_code=404, detail="Room not found")
+            if room["is_lab"]:
+                raise HTTPException(status_code=422, detail=f"{room['room_code']} is a lab - pick a lecture room as the classroom")
+            room_code = room["room_code"]
+        _ensure_section(conn, branch, year, section)
+        group_code = f"{branch}{year}{section}"
+        conn.execute("UPDATE student_groups SET room_id=? WHERE group_code=?", (room_id, group_code))
+        conn.commit()
+        warning = None
+        if room_id is not None:
+            others = [r["group_code"] for r in conn.execute(
+                "SELECT group_code FROM student_groups WHERE room_id=? AND is_active=1 AND group_code!=?",
+                (room_id, group_code)).fetchall()]
+            if others:
+                warning = (f"{room_code} is also the classroom of {', '.join(others)} - the generator "
+                           f"will move clashing periods to another free room.")
+        return {"success": True, "group_code": group_code, "home_room": room_code, "warning": warning}
+    finally:
+        conn.close()
+
+
+@app.delete("/api/admin/sections/{group_code}")
+async def delete_section(group_code: str, _=Depends(require_admin)):
+    """Remove one section with its teacher assignments and generated
+    timetables. Not reversible - the frontend confirms first."""
+    conn = get_db()
+    try:
+        row = conn.execute("SELECT id, department FROM student_groups WHERE group_code=?", (group_code,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Section {group_code} not found")
+        branch = row["department"]
+        rest = group_code[len(branch):]
+        year, section = int(rest[0]), rest[1:]
+        conn.execute("DELETE FROM timetable_entries WHERE group_id=?", (row["id"],))
+        conn.execute("DELETE FROM course_assignments WHERE group_id=?", (row["id"],))
+        conn.execute("DELETE FROM saved_timetables WHERE branch=? AND year=? AND section=?", (branch, year, section))
+        conn.execute("DELETE FROM student_groups WHERE id=?", (row["id"],))
+        conn.commit()
+        return {"success": True, "message": f"Section {group_code} removed", **_class_info(conn, branch, year)}
+    finally:
+        conn.close()
+
 
 @app.get("/api/groups/{group_id}/timetable")
 async def get_group_timetable(group_id: int, _=Depends(get_current_user)):
@@ -1989,7 +2621,7 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
         cursor.execute("DELETE FROM timetable_entries WHERE group_id=? AND semester=?", (group_id, request.semester))
 
         cursor.execute('''
-            SELECT ca.*, c.course_code, c.course_name, c.is_lab as course_is_lab, t.name as teacher_name, t.id as tid
+            SELECT ca.*, c.course_code, c.course_name, c.is_lab as course_is_lab, c.credits as course_credits, t.name as teacher_name, t.id as tid
             FROM course_assignments ca
             JOIN courses c ON ca.course_id=c.id
             JOIN teachers t ON ca.teacher_id=t.id
@@ -2000,7 +2632,7 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
 
         if not assignments:
             cursor.execute('''
-                SELECT ca.*, c.course_code, c.course_name, c.is_lab as course_is_lab, t.name as teacher_name, t.id as tid
+                SELECT ca.*, c.course_code, c.course_name, c.is_lab as course_is_lab, c.credits as course_credits, t.name as teacher_name, t.id as tid
                 FROM course_assignments ca
                 JOIN courses c ON ca.course_id=c.id
                 JOIN teachers t ON ca.teacher_id=t.id
@@ -2019,7 +2651,7 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
             if borrowed:
                 _assign_own_teachers(cursor, group_id, request.branch, borrowed)
                 cursor.execute('''
-                    SELECT ca.*, c.course_code, c.course_name, c.is_lab as course_is_lab, t.name as teacher_name, t.id as tid
+                    SELECT ca.*, c.course_code, c.course_name, c.is_lab as course_is_lab, c.credits as course_credits, t.name as teacher_name, t.id as tid
                     FROM course_assignments ca
                     JOIN courses c ON ca.course_id=c.id
                     JOIN teachers t ON ca.teacher_id=t.id
@@ -2036,7 +2668,7 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
         cursor.execute("SELECT * FROM time_slots WHERE is_break=0 AND is_active=1 ORDER BY day_of_week, start_time")
         available_slots = [dict(r) for r in cursor.fetchall()]
 
-        cursor.execute("SELECT id, room_code, is_lab FROM rooms WHERE is_active=1 ORDER BY capacity DESC")
+        cursor.execute("SELECT id, room_code, is_lab, building FROM rooms WHERE is_active=1 ORDER BY capacity DESC")
         all_rooms = [dict(r) for r in cursor.fetchall()]
         room_ids = [r["id"] for r in all_rooms]
         room_code_by_id = {r["id"]: r["room_code"] for r in all_rooms}
@@ -2047,7 +2679,11 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
         # Hard separation: a lab room is only ever used for lab sessions and a
         # non-lab room only ever for theory classes, so a class never gets
         # booked into a lab room and a lab never lands in a lecture room.
-        lab_room_ids = [r["id"] for r in all_rooms if r["is_lab"]]
+        # Labs go to this branch's own department labs first, then the common
+        # Lab Block; other departments' labs are only a last resort.
+        lab_rooms = [r for r in all_rooms if r["is_lab"]]
+        lab_rooms.sort(key=lambda r: (0 if r["building"] == request.branch else 1 if r["building"] == "Lab Block" else 2))
+        lab_room_ids = [r["id"] for r in lab_rooms]
         theory_room_ids = [r["id"] for r in all_rooms if not r["is_lab"]]
         if not lab_room_ids:
             lab_room_ids = room_ids  # no dedicated lab rooms configured - fall back
@@ -2069,6 +2705,22 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
         for existing_teacher_id, existing_room_id, existing_slot_id in cursor.fetchall():
             teacher_busy.setdefault(existing_teacher_id, set()).add(existing_slot_id)
             room_busy.setdefault(existing_room_id, set()).add(existing_slot_id)
+
+        # Home classroom: every theory class of this section is taught in one
+        # fixed room (student_groups.room_id) instead of whichever room happens
+        # to be free first, so students aren't moving rooms every period. Kept
+        # across regenerations; a new section gets the lecture room no other
+        # section calls home, least booked first. Other rooms are only used for
+        # a period where the home room is already taken.
+        cursor.execute("SELECT room_id FROM student_groups WHERE id=?", (group_id,))
+        home_room_id = cursor.fetchone()["room_id"]
+        if home_room_id not in theory_room_ids:
+            cursor.execute("SELECT room_id FROM student_groups WHERE room_id IS NOT NULL AND id!=?", (group_id,))
+            taken_homes = {r["room_id"] for r in cursor.fetchall()}
+            candidates = [rid for rid in theory_room_ids if rid not in taken_homes] or theory_room_ids
+            home_room_id = min(candidates, key=lambda rid: (len(room_busy.get(rid, ())), theory_room_ids.index(rid)))
+            cursor.execute("UPDATE student_groups SET room_id=? WHERE id=?", (home_room_id, group_id))
+        theory_room_ids = [home_room_id] + [rid for rid in theory_room_ids if rid != home_room_id]
 
         # Enforce each teacher's own max_hours_per_day / max_hours_per_week
         # (stored on the teacher, never checked before this) - without this a
@@ -2152,112 +2804,167 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
         # can also use that day for this group - one lab per day, period.
         group_lab_days: set = set()
         lab_count_by_day: Dict[int, int] = {}
-        MAX_LABS_PER_DAY = 2
+        MAX_LABS_PER_DAY = 2  # a day only has a morning and an afternoon 2-hour block
 
-        for assignment in lab_assignments:
-            teacher_id = assignment["tid"]
-            course_id = assignment["course_id"]
-            sessions_placed = 0
-            course_lab_days: set = set()  # this lab course is never repeated on a day
+        # Lab units: normally each lab course runs on its own (the whole section
+        # is in the lab while batches E1/E2/E3 take turns). When a section's
+        # labs can't fit that way - e.g. 5 subjects + 2 labs on a week with
+        # shortened days - labs are paired and run in PARALLEL batch rotation:
+        # E1 in lab A while E2 is in lab B, then E2/E3, then E3/E1. Every batch
+        # still does each lab once a week, in half the section time.
+        # "Can't fit" includes the credit bonus: if labs one at a time would
+        # leave no room for the extra periods of higher-credit subjects, the
+        # labs run in parallel so those periods get their slots.
+        # Pairing only for the bonus is dropped again if it costs a lab
+        # session (it needs two teachers and two lab rooms free at once):
+        # the labs are then re-placed one at a time, as without the bonus.
+        theory_periods_needed = sum(min(a["hours_per_week"], MAX_THEORY_SESSIONS_PER_WEEK) for a in theory_assignments)
+        bonus_periods_wanted = sum(credit_bonus_sessions(theory_assignments, len(available_slots)))
+        sequential_lab_periods = len(lab_assignments) * LAB_SESSIONS_PER_WEEK * LAB_SESSION_SLOTS
+        parallel_for_base = theory_periods_needed + sequential_lab_periods > len(available_slots)
+        parallel_labs = (len(lab_assignments) >= 2 and
+                         theory_periods_needed + bonus_periods_wanted + sequential_lab_periods > len(available_slots))
+        paired_units = []
+        unpaired = list(lab_assignments)
+        while unpaired:
+            first = unpaired.pop(0)
+            # Two labs can only share a time if different teachers take them.
+            partner = next((a for a in unpaired if a["tid"] != first["tid"]), None) if parallel_labs else None
+            if partner:
+                unpaired.remove(partner)
+                paired_units.append([first, partner])
+            else:
+                paired_units.append([first])
+        lab_plans = [paired_units]
+        if parallel_labs and not parallel_for_base:
+            lab_plans.append([[a] for a in lab_assignments])
 
-            for session_idx in range(LAB_SESSIONS_PER_WEEK):
-                batch = LAB_BATCHES[session_idx % len(LAB_BATCHES)]
-                placed = False
+        for plan_no, lab_units in enumerate(lab_plans):
+            cursor.execute("SAVEPOINT lab_plan")
+            before_labs = copy.deepcopy((teacher_busy, room_busy, group_busy, teacher_day_hours, teacher_week_hours,
+                                         entries_list, conflicts, assigned_count))
+            # How many weekdays may carry a lab for this section, sized to its own
+            # lab load so any mix works (6 subjects + 1 lab, 5 + 2, 4 + 2, 4 + 3):
+            # normally MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK days (keeps one
+            # lab-free day), but a section whose labs can't fit in that many days
+            # at MAX_LABS_PER_DAY gets every weekday instead of losing sessions.
+            total_lab_sessions = len(lab_units) * LAB_SESSIONS_PER_WEEK
+            lab_day_cap = min(len(slots_by_day),
+                              max(MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK, -(-total_lab_sessions // MAX_LABS_PER_DAY)))
 
-                # Hard cap: never open a new lab-day for this group beyond
-                # MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK, even if a physical
-                # weekday is still free. Without this, 2+ lab courses fill
-                # every single weekday with a lab (5 lab-courses/week needed
-                # across only 5 days), leaving no lab-free day at all - this
-                # guarantees at least one.
-                lab_day_cap_reached = len(group_lab_days) >= MAX_RECOMMENDED_LAB_SESSIONS_PER_WEEK
+            for unit in lab_units:
+                sessions_placed = 0
+                unit_lab_days: set = set()  # a lab unit is never repeated on a day
+                unit_teachers = [a["tid"] for a in unit]
 
-                # Prefer days not adjacent to an existing lab day so labs
-                # spread out (Mon/Wed/Fri) instead of running on consecutive
-                # days; adjacent days remain a fallback when nothing else fits.
-                for day in sorted(slots_by_day.keys(),
-                                  key=lambda d: (any(abs(d - g) == 1 for g in course_lab_days),
-                                                 lab_count_by_day.get(d, 0), day_load[d], d)):
-                    if day in course_lab_days:
-                        continue
-                    if lab_count_by_day.get(day, 0) >= MAX_LABS_PER_DAY:
-                        continue
-                    if lab_day_cap_reached and day not in group_lab_days:
-                        continue  # keep at least one lab-free day
+                for session_idx in range(LAB_SESSIONS_PER_WEEK):
+                    # Course i of the unit takes batch (session + i) - so in a pair
+                    # the two labs always have different batches at the same time.
+                    batches = [LAB_BATCHES[(session_idx + i) % len(LAB_BATCHES)] for i in range(len(unit))]
+                    placed = False
 
-                    day_slots = slots_by_day[day]
-                    for i in range(len(day_slots) - LAB_SESSION_SLOTS + 1):
-                        block = day_slots[i:i + LAB_SESSION_SLOTS]
+                    # Never open a new lab-day beyond lab_day_cap (see above) -
+                    # keeps a lab-free day whenever this section's labs allow it.
+                    lab_day_cap_reached = len(group_lab_days) >= lab_day_cap
 
-                        # Only a truly back-to-back block counts as "2 hours"
-                        # (a gap here means the lunch break sits between them).
-                        if any(block[j]["end_time"] != block[j + 1]["start_time"]
-                               for j in range(len(block) - 1)):
+                    # Prefer days not adjacent to an existing lab day so labs
+                    # spread out (Mon/Wed/Fri) instead of running on consecutive
+                    # days; adjacent days remain a fallback when nothing else fits.
+                    for day in sorted(slots_by_day.keys(),
+                                      key=lambda d: (any(abs(d - g) == 1 for g in unit_lab_days),
+                                                     lab_count_by_day.get(d, 0), day_load[d], d)):
+                        if day in unit_lab_days:
                             continue
-
-                        block_slot_ids = [s["id"] for s in block]
-                        if any(sid in group_busy for sid in block_slot_ids):
+                        if lab_count_by_day.get(day, 0) >= MAX_LABS_PER_DAY:
                             continue
-                        if any(sid in teacher_busy.get(teacher_id, set()) for sid in block_slot_ids):
-                            continue
-                        if not teacher_has_capacity(teacher_id, day, LAB_SESSION_SLOTS):
-                            continue
+                        if lab_day_cap_reached and day not in group_lab_days:
+                            continue  # keep at least one lab-free day
 
-                        room_id = next(
-                            (rid for rid in lab_room_ids
-                             if not any(sid in room_busy.get(rid, set()) for sid in block_slot_ids)),
-                            None
-                        )
-                        if room_id is None:
-                            continue
+                        day_slots = slots_by_day[day]
+                        for i in range(len(day_slots) - LAB_SESSION_SLOTS + 1):
+                            block = day_slots[i:i + LAB_SESSION_SLOTS]
 
-                        for slot in block:
-                            cursor.execute('''
-                                INSERT INTO timetable_entries
-                                    (teacher_id,group_id,room_id,slot_id,course_id,semester,academic_year,status,batch)
-                                VALUES (?,?,?,?,?,?,"2024-2025","scheduled",?)
-                            ''', (teacher_id, group_id, room_id, slot["id"], course_id, request.semester, batch))
+                            # Only a truly back-to-back block counts as "2 hours"
+                            # (a gap here means the lunch break sits between them).
+                            if any(block[j]["end_time"] != block[j + 1]["start_time"]
+                                   for j in range(len(block) - 1)):
+                                continue
 
-                            teacher_busy.setdefault(teacher_id, set()).add(slot["id"])
-                            room_busy.setdefault(room_id, set()).add(slot["id"])
-                            group_busy.add(slot["id"])
+                            block_slot_ids = [s["id"] for s in block]
+                            if any(sid in group_busy for sid in block_slot_ids):
+                                continue
+                            if any(sid in teacher_busy.get(t, set()) for t in unit_teachers for sid in block_slot_ids):
+                                continue
+                            if not all(teacher_has_capacity(t, day, LAB_SESSION_SLOTS) for t in unit_teachers):
+                                continue
 
-                            entries_list.append({
-                                "day":          slot["day_name"],
-                                "time_slot":    f"{slot['start_time']}-{slot['end_time']}",
-                                "subject_code": assignment["course_code"],
-                                "subject_name": assignment["course_name"],
-                                "teacher_name": assignment["teacher_name"],
-                                "room_code":    room_code_by_id.get(room_id),
-                                "batch":        batch
-                            })
-                            assigned_count += 1
+                            # One free lab room per course in the unit.
+                            free_rooms = [rid for rid in lab_room_ids
+                                          if not any(sid in room_busy.get(rid, set()) for sid in block_slot_ids)]
+                            if len(free_rooms) < len(unit):
+                                continue
 
-                        record_teacher_hours(teacher_id, day, LAB_SESSION_SLOTS)
-                        group_lab_days.add(day)
-                        course_lab_days.add(day)
-                        lab_count_by_day[day] = lab_count_by_day.get(day, 0) + 1
-                        day_load[day] += 1
-                        sessions_placed += 1
-                        placed = True
-                        break
+                            for assignment, batch, room_id in zip(unit, batches, free_rooms):
+                                teacher_id = assignment["tid"]
+                                for slot in block:
+                                    cursor.execute('''
+                                        INSERT INTO timetable_entries
+                                            (teacher_id,group_id,room_id,slot_id,course_id,semester,academic_year,status,batch)
+                                        VALUES (?,?,?,?,?,?,"2024-2025","scheduled",?)
+                                    ''', (teacher_id, group_id, room_id, slot["id"], assignment["course_id"], request.semester, batch))
 
-                    if placed:
-                        break
+                                    teacher_busy.setdefault(teacher_id, set()).add(slot["id"])
+                                    room_busy.setdefault(room_id, set()).add(slot["id"])
+                                    group_busy.add(slot["id"])
 
-                if not placed:
-                    break  # no day/room/teacher can fit another session this week
+                                    entries_list.append({
+                                        "day":          slot["day_name"],
+                                        "time_slot":    f"{slot['start_time']}-{slot['end_time']}",
+                                        "subject_code": assignment["course_code"],
+                                        "subject_name": assignment["course_name"],
+                                        "teacher_name": assignment["teacher_name"],
+                                        "room_code":    room_code_by_id.get(room_id),
+                                        "batch":        batch
+                                    })
+                                    assigned_count += 1
+                                record_teacher_hours(teacher_id, day, LAB_SESSION_SLOTS)
 
-            if sessions_placed < LAB_SESSIONS_PER_WEEK:
-                unmet_lab_sessions[assignment["course_code"]] = LAB_SESSIONS_PER_WEEK - sessions_placed
-                conflicts.append({
-                    "type": "lab",
-                    "description": f"{assignment['course_name']}: only {sessions_placed}/{LAB_SESSIONS_PER_WEEK} lab sessions placed (teacher/room/day conflicts)"
-                })
+                            group_lab_days.add(day)
+                            unit_lab_days.add(day)
+                            lab_count_by_day[day] = lab_count_by_day.get(day, 0) + 1
+                            day_load[day] += 1
+                            sessions_placed += 1
+                            placed = True
+                            break
+
+                        if placed:
+                            break
+
+                    if not placed:
+                        break  # no day/room/teacher can fit another session this week
+
+                if sessions_placed < LAB_SESSIONS_PER_WEEK:
+                    for assignment in unit:
+                        unmet_lab_sessions[assignment["course_code"]] = LAB_SESSIONS_PER_WEEK - sessions_placed
+                        conflicts.append({
+                            "type": "lab",
+                            "description": f"{assignment['course_name']}: only {sessions_placed}/{LAB_SESSIONS_PER_WEEK} lab sessions placed (teacher/room/day conflicts)"
+                        })
+            if not unmet_lab_sessions or plan_no == len(lab_plans) - 1:
+                break
+            # Paired labs lost a session - undo them and place the labs singly.
+            cursor.execute("ROLLBACK TO lab_plan")
+            (teacher_busy, room_busy, group_busy, teacher_day_hours, teacher_week_hours,
+             entries_list, conflicts, assigned_count) = before_labs
+            unmet_lab_sessions, group_lab_days, lab_count_by_day = {}, set(), {}
+            day_load = {day: 0 for day in slots_by_day}
 
         # Theory scheduling below only handles non-lab assignments - labs are
-        # fully scheduled above.
-        assignments = theory_assignments
+        # fully scheduled above. Higher-credit subjects go first (within the
+        # same priority), so when a week is too full for everything it is the
+        # lowest-credit subject that ends up a period short, not the heaviest.
+        assignments = sorted(theory_assignments,
+                             key=lambda a: (-(a.get("priority") or 0), -(a.get("course_credits") or 0)))
 
         # Build a schedule slot by slot
         # Strategy: round-robin across assignments, spreading evenly across the week
@@ -2266,8 +2973,13 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
         # First pass: track how many slots each assignment still needs, capped
         # at MAX_THEORY_SESSIONS_PER_WEEK regardless of the subject's own
         # hours_per_week (e.g. a subject with hours_per_week=5 still only
-        # gets 3 classes/week).
-        remaining = {i: min(a["hours_per_week"], MAX_THEORY_SESSIONS_PER_WEEK) for i, a in enumerate(assignments)}
+        # gets 3 classes/week), plus the credit bonus: higher-credit subjects
+        # get 1-2 more periods out of whatever the labs and base periods
+        # leave free.
+        base_sessions = [min(a["hours_per_week"], MAX_THEORY_SESSIONS_PER_WEEK) for a in assignments]
+        free_after_base = len(available_slots) - len(group_busy) - sum(base_sessions)
+        bonus_sessions = credit_bonus_sessions(assignments, free_after_base)
+        remaining = {i: base_sessions[i] + bonus_sessions[i] for i in range(len(assignments))}
         # Days each assignment has already been placed on for this group - used to
         # avoid scheduling the same subject twice in one day (e.g. Data Structures
         # on both Monday period 1 and Monday period 4). A repeat is only allowed
@@ -2275,6 +2987,40 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
         # or teacher-busy, so hours_per_week that don't fit into 5 distinct days
         # still get scheduled instead of silently dropped.
         subject_days_used: Dict[int, set] = {i: set() for i in range(len(assignments))}
+        subject_slots: Dict[int, list] = {i: [] for i in range(len(assignments))}
+
+        def place_theory(idx: int, slot: dict) -> bool:
+            """Book one theory period of assignments[idx] at `slot`, in the
+            section's home room if free, else the first free lecture room."""
+            nonlocal assigned_count
+            slot_id = slot["id"]
+            room_id = next((rid for rid in theory_room_ids if slot_id not in room_busy.get(rid, set())), None)
+            if room_id is None:
+                return False
+            assignment = assignments[idx]
+            teacher_id = assignment["tid"]
+            cursor.execute('''
+                INSERT INTO timetable_entries
+                    (teacher_id,group_id,room_id,slot_id,course_id,semester,academic_year,status)
+                VALUES (?,?,?,?,?,?,"2024-2025","scheduled")
+            ''', (teacher_id, group_id, room_id, slot_id, assignment["course_id"], request.semester))
+            teacher_busy.setdefault(teacher_id, set()).add(slot_id)
+            room_busy.setdefault(room_id, set()).add(slot_id)
+            group_busy.add(slot_id)
+            subject_days_used[idx].add(slot["day_of_week"])
+            subject_slots[idx].append(slot_id)
+            record_teacher_hours(teacher_id, slot["day_of_week"], 1)
+            entries_list.append({
+                "day":          slot["day_name"],
+                "time_slot":    f"{slot['start_time']}-{slot['end_time']}",
+                "subject_code": assignment["course_code"],
+                "subject_name": assignment["course_name"],
+                "teacher_name": assignment["teacher_name"],
+                "room_code":    room_code_by_id.get(room_id)
+            })
+            remaining[idx] -= 1
+            assigned_count += 1
+            return True
 
         # Sort slots to spread across days (interleave days instead of filling one day at a time)
         # Reorder slots: slot 0 of each day, then slot 1 of each day, etc.
@@ -2340,59 +3086,72 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
                 slot_index += 1
                 continue
 
-            assignment = assignments[best_idx]
-            teacher_id = assignment["tid"]
-            course_id  = assignment["course_id"]
-
-            # Find a free non-lab room (theory classes never use a lab room)
-            room_id = None
-            for rid in theory_room_ids:
-                if rid not in room_busy:
-                    room_busy[rid] = set()
-                if slot_id not in room_busy[rid]:
-                    room_id = rid
-                    break
-
-            if not room_id:
-                slot_index += 1
-                continue
-
-            # Schedule it
-            cursor.execute('''
-                INSERT INTO timetable_entries
-                    (teacher_id,group_id,room_id,slot_id,course_id,semester,academic_year,status)
-                VALUES (?,?,?,?,?,?,"2024-2025","scheduled")
-            ''', (teacher_id, group_id, room_id, slot_id, course_id, request.semester))
-
-            if teacher_id not in teacher_busy:
-                teacher_busy[teacher_id] = set()
-            teacher_busy[teacher_id].add(slot_id)
-            room_busy[room_id].add(slot_id)
-            group_busy.add(slot_id)
-            subject_days_used[best_idx].add(day_of_week)
-            record_teacher_hours(teacher_id, day_of_week, 1)
-
-            entries_list.append({
-                "day":          slot["day_name"],
-                "time_slot":    f"{slot['start_time']}-{slot['end_time']}",
-                "subject_code": assignment["course_code"],
-                "subject_name": assignment["course_name"],
-                "teacher_name": assignment["teacher_name"],
-                "room_code":    room_code_by_id.get(room_id)
-            })
-
-            remaining[best_idx] -= 1
-            assigned_count += 1
+            place_theory(best_idx, slot)
             slot_index += 1
 
             # If all done, stop
             if all(v <= 0 for v in remaining.values()):
                 break
 
+        # Second pass: the interleaved pass above walks each slot once and
+        # never goes back, so a subject can end up a period short even though
+        # free slots remain (e.g. 5 subjects + 2 labs). Retry every leftover
+        # period over all free slots, least-busy days first: a day the subject
+        # doesn't have yet is preferred, and a repeat day - never in the
+        # period right next to that subject's other class - is the last resort.
+        if any(v > 0 for v in remaining.values()):
+            slot_by_id = {s["id"]: s for s in available_slots}
+            day_busy_count = lambda d: sum(1 for sid in group_busy if slot_by_id.get(sid, {}).get("day_of_week") == d)
+            for idx in range(len(assignments)):
+                tid = assignments[idx]["tid"]
+                for allow_repeat_day in (False, True):
+                    if remaining[idx] <= 0:
+                        break
+                    for slot in sorted(available_slots, key=lambda s: (day_busy_count(s["day_of_week"]), s["day_of_week"], s["start_time"])):
+                        if remaining[idx] <= 0:
+                            break
+                        d = slot["day_of_week"]
+                        if slot["id"] in group_busy or slot["id"] in teacher_busy.get(tid, set()):
+                            continue
+                        if not teacher_has_capacity(tid, d, 1):
+                            continue
+                        if d in subject_days_used[idx]:
+                            if not allow_repeat_day:
+                                continue
+                            same_day = [slot_by_id[sid] for sid in subject_slots[idx] if slot_by_id[sid]["day_of_week"] == d]
+                            if any(s2["end_time"] == slot["start_time"] or s2["start_time"] == slot["end_time"] for s2 in same_day):
+                                continue
+                        place_theory(idx, slot)
+
+        home_room_code = room_code_by_id.get(home_room_id)
+        n_theory, n_labs = len(theory_assignments), len(lab_assignments)
+        # A bonus period that found no slot (teacher busy) is simply dropped -
+        # only a shortfall in a subject's base periods counts as unmet.
+        bonus_placed = {}
+        for i in remaining:
+            placed = len(subject_slots[i])
+            remaining[i] = max(0, base_sessions[i] - placed)
+            if placed > base_sessions[i]:
+                bonus_placed[assignments[i]["course_code"]] = placed - base_sessions[i]
+        theory_needed = sum(base_sessions) + sum(bonus_placed.values())
+        lab_needed = n_labs * LAB_SESSIONS_PER_WEEK
+        layout = {
+            "label": f"{n_theory} subject{'s' if n_theory != 1 else ''} + {n_labs} lab{'s' if n_labs != 1 else ''}",
+            "theory_subjects": n_theory,
+            "lab_courses": n_labs,
+            "theory_periods": {"placed": theory_needed - sum(max(v, 0) for v in remaining.values()), "needed": theory_needed},
+            "lab_sessions": {"placed": lab_needed - sum(unmet_lab_sessions.values()), "needed": lab_needed},
+            "credit_bonus_periods": bonus_placed,
+            "periods_used": len(group_busy),
+            "periods_available": total_slots_available,
+            "home_room": home_room_code,
+            "lab_rooms": sorted({e["room_code"] for e in entries_list if e.get("batch")}),
+        }
         timetable_data = json.dumps({
             "branch": request.branch, "year": request.year,
             "semester": request.semester, "section": request.section,
             "entries": entries_list, "days": DAYS, "time_slots": TIME_SLOTS,
+            "home_room": home_room_code, "layout": layout,
             "generated_at": datetime.now().isoformat()
         })
         cursor.execute('''
@@ -2413,7 +3172,10 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
                  for i in range(len(assignments)) if remaining[i] > 0}
         if unmet_lab_sessions:
             unmet.update({f"{code} (lab sessions)": n for code, n in unmet_lab_sessions.items()})
-        msg = f"Timetable generated: {assigned_count} slots scheduled"
+        msg = (f"Timetable generated ({layout['label']}): {assigned_count} periods scheduled, "
+               f"home classroom {home_room_code}")
+        if bonus_placed:
+            msg += ". Extra periods for higher-credit subjects: " + ", ".join(f"{c} +{n}" for c, n in bonus_placed.items())
         if unmet:
             msg += f". Could not fit: {unmet} (teacher conflicts or insufficient slots)"
 
@@ -2422,7 +3184,8 @@ async def generate_timetable(request: TimetableGenerateRequest, current_user=Dep
             "message": msg,
             "assignments_scheduled": assigned_count,
             "conflicts_detected": len(conflicts),
-            "unmet_hours": unmet
+            "unmet_hours": unmet,
+            "layout": layout,
         }
     except HTTPException:
         raise
@@ -2447,7 +3210,10 @@ async def _get_timetable(branch: str, year: int, section: str, semester: int):
         saved = cursor.fetchone()
         if saved:
             data = json.loads(saved["timetable_data"])
-            return _build_timetable_response(branch, year, section, semester, [], data.get("entries", []))
+            resp = _build_timetable_response(branch, year, section, semester, [], data.get("entries", []))
+            resp["home_room"] = data.get("home_room")
+            resp["layout"] = data.get("layout")
+            return resp
 
         group_code = f"{branch}{year}{section}"
         cursor.execute("SELECT id FROM student_groups WHERE group_code=?", (group_code,))
@@ -2470,6 +3236,63 @@ async def _get_timetable(branch: str, year: int, section: str, semester: int):
         return _build_timetable_response(branch, year, section, semester, entries)
     finally:
         conn.close()
+
+@app.get("/api/timetable/subjects")
+async def timetable_subject_summary(branch: str, year: int, section: str = "A", semester: int = 1,
+                                    _=Depends(get_current_user)):
+    """
+    Every subject of a branch + semester with its credits, and - for one
+    section - its assigned teacher and what the generated timetable actually
+    gave it (periods/week, rooms). Shown next to the timetable so credits
+    and schedule can be checked together. Subjects not assigned to this
+    section are included (teacher null) so the full semester is visible.
+    """
+    branch, section = branch.upper(), section.upper()
+    conn = get_db()
+    try:
+        group = conn.execute("SELECT id FROM student_groups WHERE group_code=?", (f"{branch}{year}{section}",)).fetchone()
+        assigned: Dict[str, str] = {}
+        if group:
+            for r in conn.execute('''
+                SELECT c.course_code, t.name AS teacher_name FROM course_assignments ca
+                JOIN courses c ON c.id = ca.course_id JOIN teachers t ON t.id = ca.teacher_id
+                WHERE ca.group_id=? AND ca.semester=?''', (group["id"], semester)).fetchall():
+                assigned[r["course_code"]] = r["teacher_name"]
+
+        periods: Dict[str, int] = {}
+        rooms: Dict[str, set] = {}
+        saved = conn.execute('''SELECT timetable_data FROM saved_timetables
+            WHERE branch=? AND year=? AND section=? AND semester=? AND is_active=1
+            ORDER BY generated_at DESC LIMIT 1''', (branch, year, section, semester)).fetchone()
+        if saved:
+            for e in json.loads(saved["timetable_data"]).get("entries", []):
+                code = e.get("subject_code")
+                periods[code] = periods.get(code, 0) + 1
+                if e.get("room_code"):
+                    rooms.setdefault(code, set()).add(e["room_code"])
+
+        subjects = []
+        for r in conn.execute('''SELECT code, name, credits, ltp, hours_per_week, is_lab, is_elective, credit_source
+            FROM subjects WHERE branch=? AND semester=? ORDER BY is_lab, code''', (branch, semester)).fetchall():
+            subjects.append({
+                "code": r["code"], "name": r["name"], "credits": r["credits"] or 0, "ltp": r["ltp"],
+                "is_lab": bool(r["is_lab"]), "is_elective": bool(r["is_elective"]),
+                "custom": (r["credit_source"] or "curriculum") != "curriculum" and
+                          credit_system.curriculum_default(r["code"], r["name"]) is None,
+                "teacher": assigned.get(r["code"]),
+                "periods_per_week": periods.get(r["code"], 0),
+                "rooms": sorted(rooms.get(r["code"], ())),
+            })
+        return {
+            "branch": branch, "year": year, "section": section, "semester": semester,
+            "subjects": subjects,
+            "total_credits": sum(s["credits"] for s in subjects),
+            "assigned_credits": sum(s["credits"] for s in subjects if s["teacher"]),
+            "scheduled": bool(saved),
+        }
+    finally:
+        conn.close()
+
 
 @app.get("/api/timetable/view")
 async def view_timetable_query(

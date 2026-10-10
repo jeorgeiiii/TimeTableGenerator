@@ -16,6 +16,10 @@ const AddSubject = () => {
   const [isElective, setIsElective] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingCurriculum, setLoadingCurriculum] = useState(false);
+  // SGSITS preset credits for the typed subject name; auto-fills Credits
+  // until the admin types their own value.
+  const [suggestion, setSuggestion] = useState<{ credits: number; ltp: string; source: string } | null>(null);
+  const [creditsTouched, setCreditsTouched] = useState(false);
 
   // Semester options based on year
   const getSemesterOptions = () => {
@@ -25,6 +29,19 @@ const AddSubject = () => {
     if (year === 4) return [7, 8];
     return [1, 2];
   };
+
+  useEffect(() => {
+    if (!name.trim()) { setSuggestion(null); return; }
+    const t = setTimeout(() => {
+      api.get("/credits/suggest", { params: { name, is_lab: isLab, hours_per_week: hours } })
+        .then(r => {
+          setSuggestion(r.data.suggestion);
+          if (r.data.suggestion && !creditsTouched) setCredits(r.data.suggestion.credits);
+        })
+        .catch(() => setSuggestion(null));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [name, isLab, hours, creditsTouched]);
 
   // Reset semester when year changes
   useEffect(() => {
@@ -63,16 +80,29 @@ const AddSubject = () => {
         hours_per_week: hours,
         is_lab: isLab,
         is_elective: isElective,
+        // Credits still on the SGSITS preset -> also store its L-T-P hours,
+        // so the Credit System shows e.g. 3-1-0 instead of an empty box.
+        ltp: suggestion && !creditsTouched && suggestion.credits === credits ? suggestion.ltp : undefined,
       };
 
       console.log("Sending subject data:", JSON.stringify(requestData, null, 2));
 
-      const response = await api.post("/admin/subjects", requestData, {
+      const send = (force: boolean) => api.post("/admin/subjects", { ...requestData, force }, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
+      let response;
+      try {
+        response = await send(false);
+      } catch (err: any) {
+        // 409 = this subject would break the SGSITS credit limits for its semester/branch.
+        const violations = err?.response?.status === 409 ? err.response.data?.detail?.violations : null;
+        if (!violations) throw err;
+        if (!window.confirm(`Adding this subject breaks the SGSITS credit limits:\n\n• ${violations.join("\n• ")}\n\nAdd it anyway?`)) return;
+        response = await send(true);
+      }
 
       console.log("Response:", response.data);
 
@@ -85,6 +115,8 @@ const AddSubject = () => {
         setYear(1);
         setSemester(1);
         setCredits(3);
+        setCreditsTouched(false);
+        setSuggestion(null);
         setHours(3);
         setIsLab(false);
         setIsElective(false);
@@ -217,11 +249,21 @@ const AddSubject = () => {
             <input
               type="number"
               value={credits}
-              onChange={e => setCredits(Number(e.target.value))}
-              min="1"
-              max="6"
+              onChange={e => { setCredits(Number(e.target.value)); setCreditsTouched(true); }}
+              min="0"
+              max="14"
               className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
             />
+            {suggestion && (
+              <p className="text-xs text-muted-foreground mt-1" title={suggestion.source}>
+                SGSITS preset: {suggestion.credits} credit{suggestion.credits === 1 ? "" : "s"} ({suggestion.ltp} L-T-P)
+                {suggestion.credits !== credits && (
+                  <button type="button" onClick={() => { setCredits(suggestion.credits); setCreditsTouched(false); }} className="ml-1 underline">
+                    use
+                  </button>
+                )}
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Hours/Week</label>

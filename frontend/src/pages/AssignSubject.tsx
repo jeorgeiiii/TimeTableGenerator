@@ -1,6 +1,8 @@
 // frontend/src/pages/AssignSubject.tsx
 import { useState, useEffect, useCallback } from "react";
-import { store, BRANCHES, YEARS, hasMultipleSections } from "@/lib/store";
+import { store, BRANCHES, YEARS } from "@/lib/store";
+import { useClassSections, ALL_SECTIONS } from "@/hooks/use-class-sections";
+import ClassroomPicker from "../components/ClassroomPicker";
 import { toast } from "sonner";
 import api from "../services/api";
 
@@ -89,46 +91,55 @@ const AssignSubject = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branch, teachers]);
 
-  // Only CSE/IT have multiple sections - everyone else is always Section A.
-  // Computed fresh at use, not just via effect, so a stale "" from a previous
-  // reset can never slip through the required-fields check below.
-  const showSectionField = !branch || hasMultipleSections(branch);
+  // A class is either one whole class (always section "A", no field shown)
+  // or divided into sections - then pick one, or "All sections" to give the
+  // subject + teacher to every section at once.
+  const { info, hasSections, sectionNames, reload: reloadClass } = useClassSections(branch, yearLabelToInt(year));
+  const roomTargets = !hasSections ? ["A"] : section === ALL_SECTIONS ? sectionNames : section ? [section] : [];
+  const showSectionField = hasSections;
   useEffect(() => {
-    if (branch && !hasMultipleSections(branch)) {
-      setSection("A");
-    }
-  }, [branch]);
+    if (!hasSections) setSection("A");
+    else if (section !== ALL_SECTIONS && !sectionNames.includes(section)) setSection("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSections, sectionNames.join(",")]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const effectiveSection = branch && !hasMultipleSections(branch) ? "A" : section;
-    if (!branch || !subjectId || !teacherId || !effectiveSection) {
+    const targets = !hasSections ? ["A"] : section === ALL_SECTIONS ? sectionNames : section ? [section] : [];
+    if (!branch || !subjectId || !teacherId || !targets.length) {
       toast.error("All fields are required");
       return;
     }
 
     try {
-      const response = await api.post("/admin/subjects/assign", {
-        subject_id: parseInt(subjectId),
-        teacher_id: parseInt(teacherId),
-        section: effectiveSection,
-        branch,
-        year: yearLabelToInt(year),
-      });
-      const data = response.data;
-      if (data.success) {
-        toast.success("Subject assigned successfully!");
-        if (data.warning) {
-          toast.warning(data.warning);
+      const done: string[] = [];
+      for (const target of targets) {
+        const response = await api.post("/admin/subjects/assign", {
+          subject_id: parseInt(subjectId),
+          teacher_id: parseInt(teacherId),
+          section: target,
+          branch,
+          year: yearLabelToInt(year),
+        });
+        const data = response.data;
+        if (!data.success) {
+          toast.error(`Section ${target}: ${data.message || "Assignment failed"}`);
+          continue;
         }
-        if (data.lab_warning) {
-          toast.warning(data.lab_warning);
-        }
+        done.push(target);
+        const where = hasSections ? `Section ${target}` : "The class";
+        if (data.layout) toast.success(`${where} now has ${data.layout}.`);
+        if (data.warning) toast.warning(data.warning);
+        if (data.lab_warning) toast.warning(data.lab_warning);
+      }
+      if (done.length) {
+        toast.success(hasSections
+          ? `Subject assigned to section${done.length > 1 ? "s" : ""} ${done.join(", ")}`
+          : "Subject assigned to the whole class");
         setSubjectId("");
         setTeacherId("");
-        setSection(hasMultipleSections(branch) ? "" : "A");
-      } else {
-        toast.error(data.message || "Assignment failed");
+        // Section stays selected, so several subjects can be assigned to the
+        // same section in a row (and its Classroom box stays visible).
       }
     } catch (error) {
       toast.error("Failed to assign subject");
@@ -245,17 +256,25 @@ const AssignSubject = () => {
             </select>
           </div>
         </div>
-        {showSectionField && (
+        {showSectionField ? (
           <div>
             <label className="block text-sm font-medium mb-1">Section *</label>
-            <input
+            <select
               value={section}
               onChange={(e) => setSection(e.target.value)}
-              placeholder="e.g., A, B, C"
               className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-            />
+            >
+              <option value="">Select Section</option>
+              {sectionNames.map(s => <option key={s} value={s}>Section {s}</option>)}
+              <option value={ALL_SECTIONS}>All sections ({sectionNames.join(", ")})</option>
+            </select>
           </div>
-        )}
+        ) : branch ? (
+          <p className="text-sm text-muted-foreground">
+            {branch} {year} is one whole class (no sections) - change this under Classes &amp; Sections.
+          </p>
+        ) : null}
+        <ClassroomPicker branch={branch} year={yearLabelToInt(year)} targets={roomTargets} info={info} onSaved={reloadClass} />
         <button
           type="submit"
           className="px-6 py-2.5 rounded-lg text-primary-foreground font-medium"

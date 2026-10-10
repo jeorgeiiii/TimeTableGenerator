@@ -39,6 +39,14 @@ export interface TimetableData {
   days: string[];
   time_slots: string[];
   timetable: Record<string, Record<string, string>>;
+  // Section's fixed classroom for theory, and what the generator scheduled
+  // (e.g. "5 subjects + 2 labs") - only on timetables generated after rooms
+  // were added.
+  home_room?: string | null;
+  layout?: {
+    label: string;
+    lab_rooms?: string[];
+  } | null;
 }
 
 class TimetableService {
@@ -124,6 +132,8 @@ class TimetableService {
       days:       result.days       ?? [],
       time_slots: result.time_slots ?? [],
       timetable:  result.timetable  ?? {},
+      home_room:  result.home_room  ?? null,
+      layout:     result.layout     ?? null,
     };
   }
 }

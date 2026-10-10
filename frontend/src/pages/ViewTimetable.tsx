@@ -1,10 +1,13 @@
 // frontend/src/pages/ViewTimetable.tsx
 import { useState, useEffect, useCallback } from "react";
-import { BRANCHES, YEARS, hasMultipleSections } from "@/lib/store";
+import { BRANCHES, YEARS } from "@/lib/store";
+import { useClassSections } from "@/hooks/use-class-sections";
 import { toast } from "sonner";
 import * as XLSX from 'xlsx';
 import { Download, Eye, Loader2 } from "lucide-react";
 import timetableService, { TimetableData } from '../services/timetable_service';
+import RoomSummary from '../components/RoomSummary';
+import SubjectCreditsPanel from '../components/SubjectCreditsPanel';
 
 // Semester options based on year (year 1 -> sem 1/2, year 2 -> sem 3/4, ...)
 const getSemesterOptions = (yearNumber: number): number[] => [yearNumber * 2 - 1, yearNumber * 2];
@@ -18,12 +21,14 @@ const ViewTimetable = () => {
   const [loading, setLoading] = useState(false);
 
   // Only CSE/IT have multiple sections - everyone else is always Section A.
-  const showSectionField = hasMultipleSections(branch);
+  // Sections come from the class's own setup (Classes & Sections): a whole
+  // class is always section "A" and shows no section picker.
+  const { hasSections, sectionNames } = useClassSections(branch, parseInt(year.replace(/\D/g, '')));
+  const showSectionField = hasSections;
   useEffect(() => {
-    if (!hasMultipleSections(branch)) {
-      setSection("A");
-    }
-  }, [branch]);
+    if (!sectionNames.includes(section)) setSection(sectionNames[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionNames.join(",")]);
 
   // Reset semester to the first one for this year whenever year changes.
   useEffect(() => {
@@ -62,7 +67,7 @@ const ViewTimetable = () => {
         const dayData = timetable.timetable?.[day];
         let cellValue = dayData?.[timeSlot] || '—';
         if (cellValue && cellValue.includes('<br>')) {
-          cellValue = cellValue.replace('<br>', ' - ');
+          cellValue = cellValue.replace(/<br>/g, ' - ');
         }
         row.push(cellValue === '—' ? '' : cellValue);
       }
@@ -131,13 +136,13 @@ const ViewTimetable = () => {
           {showSectionField && (
             <div>
               <label className="block text-sm font-medium mb-1">Section</label>
-              <input
-                type="text"
+              <select
                 value={section}
-                onChange={e => setSection(e.target.value.toUpperCase())}
-                placeholder="A"
+                onChange={e => setSection(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-lg bg-background/50 border border-border focus:ring-2 focus:ring-primary focus:outline-none"
-              />
+              >
+                {sectionNames.map(s => <option key={s} value={s}>Section {s}</option>)}
+              </select>
             </div>
           )}
           <div className="flex gap-2 items-end">
@@ -164,9 +169,11 @@ const ViewTimetable = () => {
 
       {timetable && timetable.days && (
         <div className="bg-card/60 backdrop-blur-md rounded-xl p-8 border border-border overflow-x-auto">
-          <h3 className="text-lg font-bold mb-4">
+          <h3 className="text-lg font-bold">
             {timetable.branch} - {timetable.year} - Semester {timetable.semester} - Section {timetable.section}
           </h3>
+          <RoomSummary timetable={timetable} />
+
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="bg-gradient-to-r from-primary to-accent text-white">
@@ -208,6 +215,10 @@ const ViewTimetable = () => {
             </tbody>
           </table>
         </div>
+      )}
+
+      {timetable && (
+        <SubjectCreditsPanel branch={branch} year={parseInt(year.replace(/\D/g, ''))} section={section} semester={semester} refreshKey={timetable} />
       )}
     </div>
   );
